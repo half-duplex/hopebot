@@ -1,0 +1,15 @@
+# Search all PMs for this token to process
+token_regex: "HOPE2022-[0-9A-F]{8}-(:?[0-9A-F]{4}-){3}[0-9A-F]{10}"
+# The "Room" IDs for the spaces for each token type (must match schema ENUM)
+spaces:
+  attendee: "!foo:host.tld"
+  volunteer: "!foo:host.tld"
+  presenter: "!foo:host.tld"
+# Said for !help or for PMs not containing a token
+help: >-
+  Hello! I'm the HOPE core bot.
+  To gain access to the HOPE chat rooms, just send me the token you were sent by email.
+  It looks like this: `HOPE2022-EBC92A72-9151-885B-5526-FBE8D5A37F`
+# Who is allowed to use !stats and !load_tokens
+owners:
+  - "@bar:host.tld"
