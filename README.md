@@ -16,9 +16,10 @@ From the web panel, configure the maubot client and create an Instance for this 
 
 ## Usage
 People with tokens can redeem them by just sending them to the bot. No command
-necessary.
+necessary. The only user level command is `!help`.
 
 For bot owners, the following commands are available:
+- `!adminhelp` - Links to this document
 - `!stats` - Show count of loaded and redeemed tokens
 - `!load_tokens hope.csv attendee [clear]` - Load another set of tokens,
   optionally truncating the table first
