@@ -52,6 +52,7 @@ async def upgrade_db_v1(conn: Connection, scheme: Scheme):
 class Config(BaseProxyConfig):
     def do_update(self, helper: ConfigUpdateHelper):
         helper.copy("token_regex")
+        helper.copy("enable_token_clearing")
         helper.copy("spaces")
         helper.copy("help")
         helper.copy("owners")
@@ -101,7 +102,7 @@ class HopeBot(Plugin):
     @command.argument("token_type")
     @command.argument("clear", required=False)
     async def load_tokens(
-        self, evt: MessageEvent, filename: str, token_type: str, clear
+        self, evt: MessageEvent, filename: str, token_type: str, clear: bool
     ):
         if evt.sender not in self.config["owners"]:
             LOGGER.warning("Attempt by non-owner %r to load tokens", evt.sender)
@@ -110,10 +111,19 @@ class HopeBot(Plugin):
             await evt.reply("Unknown type {}".format(repr(token_type)))
             return
         await evt.reply("Loading tokens from {}...".format(filename))
-        LOGGER.warning("Token load started by %s", evt.sender)
+        LOGGER.warning(
+            "Token load for %ss from %r started by %s, clear=%s",
+            token_type,
+            filename,
+            evt.sender,
+            clear,
+        )
         async with self.database.acquire() as conn:
             await conn.execute("BEGIN TRANSACTION")
             if clear == "clear":
+                if not self.config["enable_token_clearing"]:
+                    await evt.reply("Token clearing is disabled, aborting.")
+                    return
                 LOGGER.warning("Truncating table")
                 await conn.execute("TRUNCATE TABLE tokens")
             loaded = 0
@@ -136,6 +146,84 @@ class HopeBot(Plugin):
             await conn.execute("COMMIT")
         LOGGER.info("Token load finished, loaded %d", loaded)
         await evt.reply("Done, loaded {} {} tokens".format(loaded, token_type))
+
+    @command.new(name="mark_unused")
+    @command.argument("token")
+    async def mark_unused(self, evt: MessageEvent, token: str):
+        if evt.sender not in self.config["owners"]:
+            LOGGER.warning(
+                "Attempt by non-owner %r to mark token unused: %r", evt.sender, token
+            )
+            return
+
+        token_match = self.token_regex.fullmatch(token)
+        if token_match:
+            token_hash = sha256(token.encode()).digest()
+        else:
+            token_hash = bytes.fromhex(token)
+
+        async with self.database.acquire() as conn:
+            await conn.execute("BEGIN TRANSACTION")
+            d = await conn.fetchrow(
+                "SELECT * FROM tokens WHERE token_hash = $1 FOR UPDATE",
+                token_hash,
+            )
+
+            if not d:
+                await evt.reply("Sorry, that's not a valid token/hash.")
+                return
+            if d["used_at"] is None:
+                await evt.reply("That token hasn't been used")
+                return
+
+            LOGGER.warning(
+                "%r marked token unused (previously used by %r at %s): %r",
+                evt.sender,
+                d["used_by"],
+                d["used_at"],
+                token,
+            )
+
+            await conn.execute(
+                (
+                    "UPDATE tokens SET used_at = NULL, used_by = NULL "
+                    "WHERE token_hash = $1"
+                ),
+                token_hash,
+            )
+            await conn.execute("COMMIT")
+        await evt.reply("Done")
+
+    @command.new(name="token_info")
+    @command.argument("token")
+    async def token_info(self, evt: MessageEvent, token: str):
+        if evt.sender not in self.config["owners"]:
+            LOGGER.warning(
+                "Attempt by non-owner %r to get info for token %r", evt.sender, token
+            )
+            return
+
+        token_match = self.token_regex.fullmatch(token)
+        if token_match:
+            token_hash = sha256(token.encode()).digest()
+        else:
+            token_hash = bytes.fromhex(token)
+
+        d = await self.database.fetchrow(
+            "SELECT * FROM tokens WHERE token_hash = $1 FOR UPDATE",
+            token_hash,
+        )
+
+        if not d:
+            await evt.reply("Sorry, that's not a valid token/hash.")
+            return
+        if d["used_at"] is None:
+            await evt.reply("That token hasn't been used")
+            return
+
+        await evt.reply(
+            "That token was used by {} at {}".format(d["used_by"], d["used_at"])
+        )
 
     @event.on(EventType.ROOM_MEMBER)
     async def new_room(self, evt: StateEvent):
@@ -208,56 +296,58 @@ class HopeBot(Plugin):
                 )
             await conn.execute("COMMIT")
 
-            if d["used_at"] is None or d["used_by"] == evt.sender:
-                LOGGER.info(
-                    "Inviting %r to %r (%r)",
+        if d["used_at"] is None or d["used_by"] == evt.sender:
+            LOGGER.info(
+                "Inviting %r to %r (%r)",
+                evt.sender,
+                d["type"],
+                self.config["spaces"].get(d["type"]),
+            )
+            if d["type"] not in self.config["spaces"]:
+                await evt.reply(
+                    "Sorry, your token is configured incorrectly! "
+                    "Please try again later, or report this problem to staff."
+                )
+                LOGGER.error(
+                    "Token from %r marked as %r but I don't know that space!",
                     evt.sender,
                     d["type"],
-                    self.config["spaces"].get(d["type"]),
-                )
-                if d["type"] not in self.config["spaces"]:
-                    await evt.reply(
-                        "Sorry, your token is configured incorrectly! "
-                        "Please try again later, or report this problem to staff."
-                    )
-                    LOGGER.error(
-                        "Token from %r marked as %r but I don't know that space!",
-                        evt.sender,
-                        d["type"],
-                        token,
-                    )
-                    return
-                try:
-                    await evt.client.invite_user(
-                        self.config["spaces"][d["type"]], evt.sender
-                    )
-                except MForbidden:
-                    await evt.reply(
-                        (
-                            "I couldn't invite you to the Space for {}s. "
-                            "Are you already in it?"
-                        ).format(d["type"])
-                    )
-                    return
-                await evt.reply(
-                    (
-                        "I've invited you to the Space for {}s!  \n"
-                        "You should see the invite in your Spaces list.  \n"
-                        "Once you accept it, from there you can join the "
-                        "rooms and spaces that interest you. Thanks for coming to HOPE!"
-                    ).format(d["type"])
-                )
-            else:
-                LOGGER.info(
-                    "Attempted token reuse: %r used %r's (%r)",
-                    evt.sender,
-                    d["used_by"],
                     token,
                 )
-                await evt.reply(
-                    "Sorry, that token has already been used by someone else. "
-                    "Are you on the correct account?"
+                return
+            try:
+                await evt.client.invite_user(
+                    self.config["spaces"][d["type"]], evt.sender
                 )
+            except MForbidden:
+                await evt.reply(
+                    (
+                        "I couldn't invite you to the Space for {}s. "
+                        "Are you already in it? Maybe you haven't "
+                        "accepted the invite - check the Spaces list on "
+                        "the left or in the menu."
+                    ).format(d["type"])
+                )
+                return
+            await evt.reply(
+                (
+                    "I've invited you to the Space for {}s!  \n"
+                    "You should see the invite in your Spaces list.  \n"
+                    "Once you accept it, from there you can join the "
+                    "rooms and spaces that interest you. Thanks for coming to HOPE!"
+                ).format(d["type"])
+            )
+        else:
+            LOGGER.info(
+                "Attempted token reuse: %r used %r's (%r)",
+                evt.sender,
+                d["used_by"],
+                token,
+            )
+            await evt.reply(
+                "Sorry, that token has already been used by someone else. "
+                "Are you on the correct account?"
+            )
 
     @classmethod
     def get_config_class(cls) -> Type[BaseProxyConfig]:
