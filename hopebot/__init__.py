@@ -573,26 +573,24 @@ class HopeBot(Plugin):
 
         if self.direct_rooms is None:
             await self.sync_direct_rooms(evt.client)
-        if evt.room_id not in self.direct_rooms.get(evt.sender, []):
-            LOGGER.debug(
-                "Room message in %r: %r: %r (%r)",
-                evt.room_id,
-                evt.sender,
-                evt.content.body,
-                self.direct_rooms.get(evt.sender, []),
-            )
-            if token_match:
-                # TODO: delete message? tell user?
-                LOGGER.warning(
-                    "Token found in non-PM room: %r %r", evt.sender, evt.room_id
-                )
-            return
-        LOGGER.debug("PM message: %r: %r", evt.sender, evt.content.body)
+        pm = evt.room_id in self.direct_rooms.get(evt.sender, [])
+
+        LOGGER.debug(
+            "%s in %r: %r: %r",
+            "PM" if pm else "Room message",
+            evt.room_id,
+            evt.sender,
+            evt.content.body,
+        )
+
+        if token_match and not pm:
+            LOGGER.warning("Token found in non-PM room: %r %r", evt.sender, evt.room_id)
 
         if evt.content.body[0] == "!":
             return
         if not token_match:
-            await evt.reply(self.config["help"])
+            if pm:
+                await evt.reply(self.config["help"])
             return
 
         token = token_match.group(0)
@@ -605,7 +603,8 @@ class HopeBot(Plugin):
             )
 
             if not d:
-                await evt.reply("Sorry, that's not a valid token.")
+                if pm:
+                    await evt.reply("Sorry, that's not a valid token.")
                 return
             if d["used_at"] is None:
                 LOGGER.info("Marking token used: %r %r", evt.sender, token)
@@ -627,10 +626,11 @@ class HopeBot(Plugin):
                 self.config["spaces"].get(d["type"]),
             )
             if d["type"] not in self.config["spaces"]:
-                await evt.reply(
-                    "Sorry, your token is configured incorrectly! "
-                    "Please try again later, or report this problem to staff."
-                )
+                if pm:
+                    await evt.reply(
+                        "Sorry, your token is configured incorrectly! "
+                        "Please try again later, or report this problem to staff."
+                    )
                 LOGGER.error(
                     "Token from %r marked as %r but I don't know that space!",
                     evt.sender,
@@ -643,23 +643,25 @@ class HopeBot(Plugin):
                     self.config["spaces"][d["type"]], evt.sender
                 )
             except MForbidden:
+                if pm:
+                    await evt.reply(
+                        (
+                            "I couldn't invite you to the Space for {}s. "
+                            "Are you already in it? Maybe you haven't "
+                            "accepted the invite - check the Spaces list on "
+                            "the left or in the menu."
+                        ).format(d["type"])
+                    )
+                return
+            if pm or not d["used_at"]:  # PM, or not previously used
                 await evt.reply(
                     (
-                        "I couldn't invite you to the Space for {}s. "
-                        "Are you already in it? Maybe you haven't "
-                        "accepted the invite - check the Spaces list on "
-                        "the left or in the menu."
+                        "I've invited you to the Space for {}s!  \n"
+                        "You should see the invite in your Spaces list.  \n"
+                        "Once you accept it, from there you can join the "
+                        "rooms and spaces that interest you. Thanks for coming to HOPE!"
                     ).format(d["type"])
                 )
-                return
-            await evt.reply(
-                (
-                    "I've invited you to the Space for {}s!  \n"
-                    "You should see the invite in your Spaces list.  \n"
-                    "Once you accept it, from there you can join the "
-                    "rooms and spaces that interest you. Thanks for coming to HOPE!"
-                ).format(d["type"])
-            )
         else:
             LOGGER.info(
                 "Attempted token reuse: %r used %r's (%r)",
@@ -667,10 +669,11 @@ class HopeBot(Plugin):
                 d["used_by"],
                 token,
             )
-            await evt.reply(
-                "Sorry, that token has already been used by someone else. "
-                "Are you on the correct account?"
-            )
+            if pm:
+                await evt.reply(
+                    "Sorry, that token has already been used by someone else. "
+                    "Are you on the correct account?"
+                )
 
     @classmethod
     def get_config_class(cls) -> Type[BaseProxyConfig]:
