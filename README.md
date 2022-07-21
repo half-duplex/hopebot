@@ -15,8 +15,9 @@ Clone this repository, and with the virtualenv active, from inside this folder r
 From the web panel, configure the maubot client and create an Instance for this plugin, then configure it.
 
 ## Usage
-People with tokens can redeem them by just sending them to the bot. No command
-necessary. The only user level command is `!help`.
+Users can:
+- Redeem tokens by just sending them to the bot
+- Use the only user level command, `!help`
 
 For bot owners, the following commands are available:
 - `!adminhelp` - Links to this document
@@ -25,6 +26,7 @@ For bot owners, the following commands are available:
   optionally truncating the table first
 - `!mark_unused token|hash` - Allow the token to be used again
 - `!token_info token|hash` - Show who redeemed a token and when
+- `!sync_talks` - Synchronize scheduled talks to rooms
 
 ## Contributions
 Contributions are welcome. They must be licensed under EUPL-1.2, linted with `flake8`, formatted with

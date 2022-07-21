@@ -1,18 +1,23 @@
 from __future__ import annotations
 
-from asyncio import Lock
+from asyncio import Lock, sleep
+from datetime import datetime
 from hashlib import sha256
 import logging
 import re
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
+from aiohttp import ClientSession as HTTPClientSession
 from asyncpg.exceptions import UniqueViolationError
 from maubot import Plugin
 from maubot.handlers import command, event
-from mautrix.errors.request import MForbidden
-from mautrix.types import EventType, Membership
+from mautrix.errors.request import MForbidden, MNotFound
+from mautrix.types import EventType, JoinRule, Membership, RoomCreatePreset, StateEvent
 from mautrix.util.async_db import Scheme, UpgradeTable
 from mautrix.util.config import BaseProxyConfig
+
+from .image_gen import draw_flow_field
 
 if TYPE_CHECKING:
     from typing import Type
@@ -20,11 +25,10 @@ if TYPE_CHECKING:
     from maubot import MessageEvent
     from mautrix.util.async_db import Connection
     from mautrix.util.config import ConfigUpdateHelper
-    from mautrix.types import StateEvent
 
 
+TITLE_XOFY_REGEX = re.compile(r"(.*),? \(?(\d+) of \d+\)?")
 LOGGER = logging.getLogger(__name__)
-
 upgrade_table = UpgradeTable()
 
 
@@ -49,6 +53,17 @@ async def upgrade_db_v1(conn: Connection, scheme: Scheme):
     )
 
 
+@upgrade_table.register(description="Add talk chat persistence")
+async def upgrade_db_v2(conn: Connection):
+    await conn.execute(
+        """CREATE TABLE talks (
+            talk_id        INTEGER NOT NULL PRIMARY KEY,
+            talk_shortcode VARCHAR(16) NOT NULL UNIQUE,
+            room_id        VARCHAR(128) NOT NULL
+        )"""
+    )
+
+
 class Config(BaseProxyConfig):
     def do_update(self, helper: ConfigUpdateHelper):
         helper.copy("token_regex")
@@ -56,11 +71,14 @@ class Config(BaseProxyConfig):
         helper.copy("spaces")
         helper.copy("help")
         helper.copy("owners")
+        helper.copy("talk_chat_space")
+        helper.copy("pretalx_json_url")
 
 
 class HopeBot(Plugin):
     direct_rooms = None
     direct_update_lock = Lock()
+    httpsession = HTTPClientSession()
 
     async def start(self):
         self.config.load_and_update()
@@ -68,6 +86,10 @@ class HopeBot(Plugin):
             self.config["token_regex"],
             re.IGNORECASE,
         )
+
+    async def stop(self):
+        LOGGER.info("Hopebot plugin stopping")
+        self.httpsession.close()
 
     @command.new()
     async def help(self, evt: MessageEvent):
@@ -102,6 +124,294 @@ class HopeBot(Plugin):
                 used_tokens,
                 (used_tokens / total_tokens * 100) if total_tokens > 0 else 100,
             )
+        )
+
+    @command.new(name="sync_talks")
+    @command.argument("clear", required=False)
+    async def sync_talks(self, evt: MessageEvent, clear: bool):
+        if evt.sender not in self.config["owners"]:
+            LOGGER.warning("Attempt by non-owner %r to sync talks", evt.sender)
+            return
+        await evt.reply("This will take a long time.")
+
+        r = await self.httpsession.get(self.config["pretalx_json_url"])
+        data = await r.json()
+        conf = data["schedule"]["conference"]
+
+        all_talks = {}
+        for day in conf["days"]:
+            for talks in day["rooms"].values():
+                for talk in talks:
+
+                    # Shorten room names
+                    if talk["room"] == "Other":
+                        room_short = ""
+                    elif talk["room"].startswith("Workshop "):
+                        room_short = talk["room"].split(" ")[1]
+                    else:
+                        room_short = talk["room"].split(" ")[0]
+
+                    title = talk["title"]
+                    # Deduplicate "Foo (1 of 3)" titles
+                    xofy = TITLE_XOFY_REGEX.fullmatch(title)
+                    if xofy:
+                        if room_short:
+                            room_short += ": "
+                        room_name = room_short + xofy.group(1)
+                    else:
+                        # add day/time prefix
+                        time = datetime.fromisoformat(talk["date"])
+                        if room_short:
+                            room_short = "-" + room_short
+                        room_name = "{}{}: {}".format(
+                            time.strftime("%a-%H"), room_short, title
+                        )
+
+                    all_talks[room_name] = all_talks.get(room_name, []) + [talk]
+
+        async with self.database.acquire() as conn:
+            for room_name, talks_unsorted in all_talks.items():
+                delay = 1
+                LOGGER.info("Syncing talks: %d of: %r", len(talks), room_name)
+                talks = sorted(talks_unsorted, key=lambda x: x["date"])
+
+                topic = talks[0]["abstract"] + "<br>"
+                topic_plain = talks[0]["abstract"] + "\n"
+                for talk in talks:
+                    date = datetime.fromisoformat(talk["date"]).strftime("%a %H:%M %Z")
+                    topic += "<br><a href='{2}'>{0} in {1}</a>".format(
+                        date, talk["room"], talk["url"]
+                    )
+                    topic_plain += "\n{} in {}, {}  ".format(
+                        date, talk["room"], talk["url"]
+                    )
+
+                room_id = await conn.fetchval(
+                    "SELECT room_id FROM talks WHERE talk_id = $1", talks[0]["id"]
+                )
+                if not room_id:
+                    delay += 3
+                    avatar_url = await self.create_avatar(evt.client, talks[0]["id"])
+                    room_id = await evt.client.create_room(
+                        name=room_name,
+                        preset=RoomCreatePreset.TRUSTED_PRIVATE,
+                        invitees=[],  # ["@mal:hope.net"],  # self.config["owners"],
+                        initial_state=[
+                            StateEvent(
+                                type=EventType.SPACE_PARENT,
+                                room_id=None,
+                                event_id=None,
+                                sender=None,
+                                timestamp=None,
+                                state_key=self.config["talk_chat_space"],
+                                content={
+                                    "canonical": True,
+                                    "via": [
+                                        self.config["talk_chat_space"].split(":")[1]
+                                    ],
+                                },
+                            ),
+                            StateEvent(
+                                type=EventType.ROOM_JOIN_RULES,
+                                room_id=None,
+                                event_id=None,
+                                sender=None,
+                                timestamp=None,
+                                state_key=None,
+                                content={
+                                    "join_rule": JoinRule.RESTRICTED,
+                                    "allow": [
+                                        {
+                                            "type": "m.room_membership",
+                                            "room_id": self.config["talk_chat_space"],
+                                        }
+                                    ],
+                                },
+                            ),
+                            StateEvent(
+                                type=EventType.ROOM_TOPIC,
+                                room_id=None,
+                                event_id=None,
+                                sender=None,
+                                timestamp=None,
+                                state_key=None,
+                                content={
+                                    "topic": topic_plain,
+                                    "m.topic": [
+                                        {
+                                            "mimetype": "text/html",
+                                            "body": topic,
+                                        },
+                                        {
+                                            "mimetype": "text/plain",
+                                            "body": topic_plain,
+                                        },
+                                    ],
+                                },
+                            ),
+                            StateEvent(
+                                type=EventType.ROOM_AVATAR,
+                                room_id=None,
+                                event_id=None,
+                                sender=None,
+                                timestamp=None,
+                                state_key=None,
+                                content={
+                                    "url": avatar_url,
+                                },
+                            ),
+                            StateEvent(
+                                type=EventType.ROOM_POWER_LEVELS,
+                                room_id=None,
+                                event_id=None,
+                                sender=None,
+                                timestamp=None,
+                                state_key=None,
+                                content={
+                                    "ban": 50,
+                                    "events": {
+                                        EventType.ROOM_AVATAR: 100,
+                                        EventType.ROOM_CANONICAL_ALIAS: 100,
+                                        EventType.ROOM_ENCRYPTION: 100,
+                                        EventType.ROOM_HISTORY_VISIBILITY: 100,
+                                        EventType.ROOM_NAME: 100,
+                                        EventType.ROOM_TOPIC: 100,
+                                        EventType.ROOM_POWER_LEVELS: 100,
+                                        "m.room.server_acl": 100,
+                                        EventType.ROOM_TOMBSTONE: 100,
+                                        EventType.ROOM_JOIN_RULES: 100,
+                                    },
+                                    "invite": 100,
+                                    "kick": 50,
+                                    # "notifications": {},
+                                    "redact": 50,
+                                    "state_default": 50,
+                                    "users": {
+                                        uid: 100
+                                        for uid in self.config["owners"]
+                                        + [evt.client.mxid]
+                                    },
+                                },
+                            ),
+                        ],
+                    )
+                    if not room_id:
+                        LOGGER.error("Error creating room for %r", room_name)
+                        continue
+                    await evt.client.send_state_event(
+                        self.config["talk_chat_space"],
+                        EventType.SPACE_CHILD,
+                        content={"via": [room_id.split(":")[1]]},
+                        state_key=room_id,
+                    )
+
+                    LOGGER.info("Created room %r for %r", room_id, room_name)
+                    await conn.executemany(
+                        (
+                            "INSERT INTO talks "
+                            "(talk_id, talk_shortcode, room_id) VALUES ($1, $2, $3)"
+                        ),
+                        (
+                            (
+                                talk["id"],
+                                self.get_talk_shortcode(talk["url"]),
+                                room_id,
+                            )
+                            for talk in talks
+                        ),
+                    )
+
+                # Match room name
+                current_name_evt = await evt.client.get_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_NAME,
+                )
+                if current_name_evt.name != room_name:
+                    delay += 1
+                    LOGGER.debug(
+                        "Updating room name for %r from %r to %r",
+                        room_id,
+                        current_name_evt.name,
+                        room_name,
+                    )
+                    await evt.client.send_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_NAME,
+                        content={
+                            "name": room_name,
+                        },
+                    )
+
+                # Match topic
+                current_topic_evt = await evt.client.get_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_TOPIC,
+                )
+                if current_topic_evt.topic != topic_plain:
+                    delay += 1
+                    LOGGER.debug("Updating room topic for %r (%r)", room_id, room_name)
+                    await evt.client.send_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_TOPIC,
+                        content={
+                            "topic": topic_plain,
+                            "m.topic": [
+                                {
+                                    "mimetype": "text/html",
+                                    "body": topic,
+                                },
+                                {
+                                    "mimetype": "text/plain",
+                                    "body": topic_plain,
+                                },
+                            ],
+                        },
+                    )
+
+                # Set avatar
+                try:
+                    current_avatar_evt = await evt.client.get_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_AVATAR,
+                    )
+                    current_avatar = current_avatar_evt.url
+                except MNotFound:
+                    current_avatar = None
+                if not current_avatar:
+                    delay += 1
+                    LOGGER.debug(
+                        "Setting avatar for for %r (%r)",
+                        room_id,
+                        room_name,
+                    )
+                    avatar_url = await self.create_avatar(evt.client, talks[0]["id"])
+                    await evt.client.send_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_AVATAR,
+                        content={
+                            "url": avatar_url,
+                        },
+                    )
+
+                # Match permissions
+                # power_levels = await evt.client.get_state_event(
+                #    room_id=room_id,
+                #    event_type=EventType.ROOM_POWER_LEVELS,
+                # )
+                # LOGGER.critical("PLs: %r", power_levels)
+
+                # TODO: match more room info - space membership? perms?
+
+                # Comment if using a ratelimit-exempt account
+                await sleep(delay * 2)
+        await evt.reply("Done!")
+
+    async def create_avatar(self, client, seed):
+        LOGGER.info("Generating avatar for seed %d", seed)
+        avatar_data = await draw_flow_field(500, 500, num=2, seed=seed)
+        return await client.upload_media(
+            avatar_data,
+            mime_type="image/jpeg",
         )
 
     @command.new(name="load_tokens")
@@ -369,3 +679,7 @@ class HopeBot(Plugin):
     @classmethod
     def get_db_upgrade_table(cls) -> UpgradeTable:
         return upgrade_table
+
+    def get_talk_shortcode(self, url: str):
+        # TODO: sanity check url, maybe catch exceptions
+        return urlparse(url).path.split("/")[3]

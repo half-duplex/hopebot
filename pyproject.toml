@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hopebot"
-version = "1.1.0"
+version = "1.2.0"
 description = "A maubot plugin for the HOPE conference Matrix systems"
 authors = ["Trevor Bergeron <mal@sec.gd>"]
 license = "EUPL-1.2"
@@ -9,7 +9,10 @@ homepage = "https://github.com/half-duplex/hopebot"
 keywords = ["matrix", "maubot"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = ">=3.8,<3.11"
+PySide2 = "^5.15.2"
+numpy = "^1.23.1"
+perlin-numpy = {git = "https://github.com/pvigier/perlin-numpy"}
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
