@@ -107,24 +107,36 @@ class HopeBot(Plugin):
         if evt.sender not in self.config["owners"]:
             return
         async with self.database.acquire() as conn:
-            r = await conn.fetchrow(
-                "SELECT COUNT(*) AS rowcount FROM tokens",
+            total = {
+                row["type"]: row["rowcount"]
+                for row in await conn.fetch(
+                    "SELECT type, COUNT(*) AS rowcount FROM tokens GROUP BY type",
+                )
+            }
+            used = {
+                row["type"]: row["rowcount"]
+                for row in await conn.fetch(
+                    "SELECT type, COUNT(*) AS rowcount FROM tokens "
+                    "WHERE used_by IS NOT NULL GROUP BY type"
+                )
+            }
+        response = ""
+        for token_type in total:
+            response += "Used {}: {}/{} ({:.2f}%)  \n".format(
+                token_type,
+                used[token_type],
+                total[token_type],
+                (used[token_type] / total[token_type] * 100)
+                if total[token_type] > 0
+                else 100,
             )
-            total_tokens = r[0]
-            r = await conn.fetchrow(
-                (
-                    "SELECT COUNT(*) AS rowcount FROM tokens "
-                    "WHERE used_by IS NOT NULL"
-                ),
-            )
-            used_tokens = r[0]
-        await evt.reply(
-            "Total tokens: {}  \nUsed tokens: {} ({:.2f}%)".format(
-                total_tokens,
-                used_tokens,
-                (used_tokens / total_tokens * 100) if total_tokens > 0 else 100,
-            )
+        sum_used = sum(used.values())
+        sum_total = sum(total.values())
+        response += "Used total: {}/{} ({:.2f}%)  \n".format(
+            sum_used, sum_total, (sum_used / sum_total * 100) if sum_total > 0 else 100
         )
+
+        await evt.reply(response)
 
     @command.new(name="sync_talks")
     @command.argument("clear", required=False)
