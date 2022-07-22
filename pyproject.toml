@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hopebot"
-version = "1.4.0"
+version = "1.5.0"
 description = "A maubot plugin for the HOPE conference Matrix systems"
 authors = ["Trevor Bergeron <mal@sec.gd>"]
 license = "EUPL-1.2"

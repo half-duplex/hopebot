@@ -75,6 +75,18 @@ async def upgrade_db_v3(conn: Connection):
     await conn.execute("ALTER TYPE token_type ADD VALUE IF NOT EXISTS 'press'")
 
 
+def room_mention(
+    room_id, event_id: str | None = None, text: str = "", html: bool = False
+):
+    vias = "via=hope.net&via=matrix.org&via=fairydust.space"
+    event_str = ("/" + event_id) if event_id else ""
+    if html:
+        return "<a href='https://matrix.to/#/{}{}?{}'>{}</a>".format(
+            room_id, event_str, vias, text
+        )
+    return "[{}](https://matrix.to/#/{}{}?{})".format(text, room_id, event_str, vias)
+
+
 class Config(BaseProxyConfig):
     def do_update(self, helper: ConfigUpdateHelper):
         helper.copy("token_regex")
@@ -85,6 +97,7 @@ class Config(BaseProxyConfig):
         helper.copy("owners")
         helper.copy("talk_chat_space")
         helper.copy("pretalx_json_url")
+        helper.copy("mod_room")
 
 
 class HopeBot(Plugin):
@@ -119,6 +132,30 @@ class HopeBot(Plugin):
             "I am HopeBot by @mal:hope.net! "
             "[Source](https://github.com/half-duplex/hopebot)"
         )
+
+    @command.new(name="mod", must_consume_args=False)
+    async def call_mod(self, evt: MessageEvent):
+        quoted = None
+        if evt.content.relates_to.in_reply_to:
+            quoted = await evt.client.get_event(
+                evt.room_id, evt.content.relates_to.in_reply_to.event_id
+            )
+        help_evt = await evt.reply("Help is on the way 🚨")
+        reply_text = ""
+        if quoted:
+            reply_text = "<br>In reply to: {}: {}".format(
+                quoted.sender, quoted.content.body
+            )
+        message = (
+            "@room, Moderators have been summoned to {} {}{}<br>{} wrote: {}".format(
+                room_mention(evt.room_id, text="room", html=True),
+                room_mention(evt.room_id, help_evt, text="(context)", html=True),
+                reply_text,
+                evt.sender,
+                evt.content.body,
+            )
+        )
+        await evt.client.send_text(self.config["mod_room"], html=message)
 
     @command.new()
     async def stats(self, evt: MessageEvent):
@@ -639,19 +676,13 @@ class HopeBot(Plugin):
                 room_ids.remove(evt.room_id)
             if room_ids:
                 plural = len(room_ids) > 1
-                vias = "via=hope.net&via=matrix.org&via=fairydust.space"
                 await evt.reply(
                     (
                         "Here{isare} the discussion room{plur}! {links}".format(
                             isare=" are" if plural else "'s",
                             plur="s" if plural else "",
                             links=" ".join(
-                                [
-                                    "[](https://matrix.to/#/{}?{})".format(
-                                        room_id, vias
-                                    )
-                                    for room_id in room_ids
-                                ]
+                                [room_mention(room_id) for room_id in room_ids]
                             ),
                         )
                     )

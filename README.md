@@ -18,7 +18,8 @@ From the web panel, configure the maubot client and create an Instance for this 
 Users can:
 - Redeem tokens by just sending them to the bot
 - Find the room for a talk by sending the pretalx link to the bot
-- Use the only user level command, `!help`
+- Say `!help` to get the configured help text
+- Say `!mod [message]` to request a moderator's presence
 
 For bot owners, the following commands are available:
 - `!adminhelp` - Links to this document
