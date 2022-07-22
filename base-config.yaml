@@ -1,5 +1,7 @@
 # Search all PMs for this token to process:
 token_regex: "HOPE2022-[0-9A-F]{8}-(:?[0-9A-F]{4}-){3}[0-9A-F]{10}"
+# The URL format for talk links, capturing the shortcode
+schedule_talk_regex: "https://scheduler.hope.net/foo/talk/([a-z0-9]{5,})/"
 # Strongly recommended to set to false in prod
 enable_token_clearing: false
 # The "Room" IDs for the spaces for each token type (must match schema ENUM)

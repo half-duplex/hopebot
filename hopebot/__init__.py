@@ -6,7 +6,6 @@ from hashlib import sha256
 import logging
 import re
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
 from aiohttp import ClientSession as HTTPClientSession
 from asyncpg.exceptions import UniqueViolationError
@@ -67,6 +66,7 @@ async def upgrade_db_v2(conn: Connection):
 class Config(BaseProxyConfig):
     def do_update(self, helper: ConfigUpdateHelper):
         helper.copy("token_regex")
+        helper.copy("schedule_talk_regex")
         helper.copy("enable_token_clearing")
         helper.copy("spaces")
         helper.copy("help")
@@ -84,6 +84,10 @@ class HopeBot(Plugin):
         self.config.load_and_update()
         self.token_regex = re.compile(
             self.config["token_regex"],
+            re.IGNORECASE,
+        )
+        self.schedule_talk_regex = re.compile(
+            self.config["schedule_talk_regex"],
             re.IGNORECASE,
         )
 
@@ -326,7 +330,7 @@ class HopeBot(Plugin):
                         (
                             (
                                 talk["id"],
-                                self.get_talk_shortcode(talk["url"]),
+                                self.schedule_talk_regex.match(talk["url"]).group(1),
                                 room_id,
                             )
                             for talk in talks
@@ -578,10 +582,37 @@ class HopeBot(Plugin):
         self.direct_rooms = await client.get_account_data(EventType.DIRECT)
 
     @event.on(EventType.ROOM_MESSAGE)
-    async def token_attempt(self, evt: MessageEvent):
+    async def chat_message(self, evt: MessageEvent):
         if evt.sender == self.client.mxid:
             return
+
         token_match = self.token_regex.search(evt.content.body)
+        talk_shortcodes = self.schedule_talk_regex.findall(evt.content.body)
+
+        if talk_shortcodes and not token_match:
+            room_ids = [
+                await self.database.fetchval(
+                    "SELECT room_id FROM talks WHERE talk_shortcode=$1", code
+                )
+                for code in talk_shortcodes
+            ]
+            if room_ids:
+                plural = len(room_ids) > 1
+                await evt.reply(
+                    (
+                        "Here{isare} the discussion room{plur}! {links}".format(
+                            isare=" are" if plural else "'s",
+                            plur="s" if plural else "",
+                            links=" ".join(
+                                [
+                                    "[](matrix:roomid/{})".format(room_id.lstrip("!"))
+                                    for room_id in room_ids
+                                ]
+                            ),
+                        )
+                    )
+                )
+            return
 
         if self.direct_rooms is None:
             await self.sync_direct_rooms(evt.client)
@@ -694,7 +725,3 @@ class HopeBot(Plugin):
     @classmethod
     def get_db_upgrade_table(cls) -> UpgradeTable:
         return upgrade_table
-
-    def get_talk_shortcode(self, url: str):
-        # TODO: sanity check url, maybe catch exceptions
-        return urlparse(url).path.split("/")[3]
