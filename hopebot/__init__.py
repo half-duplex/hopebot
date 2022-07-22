@@ -107,6 +107,13 @@ class HopeBot(Plugin):
         )
 
     @command.new()
+    async def version(self, evt: MessageEvent):
+        await evt.reply(
+            "I am HopeBot by @mal:hope.net! "
+            "[Source](https://github.com/half-duplex/hopebot)"
+        )
+
+    @command.new()
     async def stats(self, evt: MessageEvent):
         if evt.sender not in self.config["owners"]:
             return
