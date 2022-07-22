@@ -597,6 +597,8 @@ class HopeBot(Plugin):
                 )
                 for code in talk_shortcodes
             ]
+            if evt.room_id in room_ids:  # Don't link current channel
+                room_ids.remove(evt.room_id)
             if room_ids:
                 plural = len(room_ids) > 1
                 await evt.reply(
