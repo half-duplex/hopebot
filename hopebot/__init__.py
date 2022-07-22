@@ -11,7 +11,15 @@ from asyncpg.exceptions import UniqueViolationError
 from maubot import Plugin
 from maubot.handlers import command, event
 from mautrix.errors.request import MForbidden, MNotFound
-from mautrix.types import EventType, JoinRule, Membership, RoomCreatePreset, StateEvent
+from mautrix.types import (
+    EventType,
+    JoinRule,
+    JoinRulesStateEventContent,
+    Membership,
+    RoomCreatePreset,
+    StateEvent,
+)
+from mautrix.types.event.state import JoinRestriction, JoinRestrictionType
 from mautrix.util.async_db import Scheme, UpgradeTable
 from mautrix.util.config import BaseProxyConfig
 
@@ -203,6 +211,20 @@ class HopeBot(Plugin):
                         date, talk["room"], talk["url"]
                     )
 
+                join_rules_content = JoinRulesStateEventContent(
+                    join_rule=JoinRule.RESTRICTED,
+                    allow=[
+                        JoinRestriction(
+                            type=JoinRestrictionType.ROOM_MEMBERSHIP,
+                            room_id=self.config["spaces"]["attendee"],
+                        ),
+                        JoinRestriction(
+                            type=JoinRestrictionType.ROOM_MEMBERSHIP,
+                            room_id=self.config["talk_chat_space"],
+                        ),
+                    ],
+                )
+
                 room_id = await conn.fetchval(
                     "SELECT room_id FROM talks WHERE talk_id = $1", talks[0]["id"]
                 )
@@ -235,15 +257,7 @@ class HopeBot(Plugin):
                                 sender=None,
                                 timestamp=None,
                                 state_key=None,
-                                content={
-                                    "join_rule": JoinRule.RESTRICTED,
-                                    "allow": [
-                                        {
-                                            "type": "m.room_membership",
-                                            "room_id": self.config["talk_chat_space"],
-                                        }
-                                    ],
-                                },
+                                content=join_rules_content,
                             ),
                             StateEvent(
                                 type=EventType.ROOM_TOPIC,
@@ -416,6 +430,25 @@ class HopeBot(Plugin):
                 #    event_type=EventType.ROOM_POWER_LEVELS,
                 # )
                 # LOGGER.critical("PLs: %r", power_levels)
+
+                # Match join rules
+                current_join_rules_evt = await evt.client.get_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_JOIN_RULES,
+                )
+                if current_join_rules_evt != join_rules_content:
+                    delay += 1
+                    LOGGER.debug(
+                        "Updating join rules for %r (%r), was: %r",
+                        room_id,
+                        room_name,
+                        current_join_rules_evt,
+                    )
+                    await evt.client.send_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_JOIN_RULES,
+                        content=join_rules_content,
+                    )
 
                 # TODO: match more room info - space membership? perms?
 
