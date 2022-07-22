@@ -70,6 +70,11 @@ async def upgrade_db_v2(conn: Connection):
     )
 
 
+@upgrade_table.register(description="Add press token type")
+async def upgrade_db_v3(conn: Connection):
+    await conn.execute("ALTER TYPE token_type ADD VALUE IF NOT EXISTS 'press'")
+
+
 class Config(BaseProxyConfig):
     def do_update(self, helper: ConfigUpdateHelper):
         helper.copy("token_regex")
