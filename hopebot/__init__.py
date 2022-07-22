@@ -601,6 +601,7 @@ class HopeBot(Plugin):
                 room_ids.remove(evt.room_id)
             if room_ids:
                 plural = len(room_ids) > 1
+                vias = "via=hope.net&via=matrix.org&via=fairydust.space"
                 await evt.reply(
                     (
                         "Here{isare} the discussion room{plur}! {links}".format(
@@ -608,7 +609,9 @@ class HopeBot(Plugin):
                             plur="s" if plural else "",
                             links=" ".join(
                                 [
-                                    "[](matrix:roomid/{})".format(room_id.lstrip("!"))
+                                    "[](https://matrix.to/#/{}?{})".format(
+                                        room_id, vias
+                                    )
                                     for room_id in room_ids
                                 ]
                             ),
