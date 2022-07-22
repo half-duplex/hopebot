@@ -7,7 +7,6 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from aiohttp import ClientSession as HTTPClientSession
 from asyncpg.exceptions import UniqueViolationError
 from maubot import Plugin
 from maubot.handlers import command, event
@@ -78,7 +77,6 @@ class Config(BaseProxyConfig):
 class HopeBot(Plugin):
     direct_rooms = None
     direct_update_lock = Lock()
-    httpsession = HTTPClientSession()
 
     async def start(self):
         self.config.load_and_update()
@@ -90,10 +88,6 @@ class HopeBot(Plugin):
             self.config["schedule_talk_regex"],
             re.IGNORECASE,
         )
-
-    async def stop(self):
-        LOGGER.info("Hopebot plugin stopping")
-        self.httpsession.close()
 
     @command.new()
     async def help(self, evt: MessageEvent):
@@ -157,7 +151,7 @@ class HopeBot(Plugin):
             return
         await evt.reply("This will take a long time.")
 
-        r = await self.httpsession.get(self.config["pretalx_json_url"])
+        r = await self.http.get(self.config["pretalx_json_url"])
         data = await r.json()
         conf = data["schedule"]["conference"]
 
