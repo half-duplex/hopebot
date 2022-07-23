@@ -114,6 +114,7 @@ class Config(BaseProxyConfig):
             "help",
             "owners",
             "talk_chat_space",
+            "talk_chat_skip",
             "talk_chat_moderators",
             "pretalx_json_url",
             "mod_room",
@@ -289,7 +290,8 @@ class HopeBot(Plugin):
             return
         if target_talk.startswith("http"):  # Link to shortcode
             target_talk = self.schedule_talk_regex.match(target_talk).group(1)
-        await evt.reply("This will take a long time.")
+        if not target_talk:
+            await evt.reply("This will take a long time.")
 
         r = await self.http.get(self.config["pretalx_json_url"])
         data = await r.json()
@@ -299,6 +301,11 @@ class HopeBot(Plugin):
         for day in conf["days"]:
             for talks in day["rooms"].values():
                 for talk in talks:
+                    if (
+                        self.schedule_talk_regex.match(talk["url"]).group(1)
+                        in self.config["talk_chat_skip"]
+                    ):
+                        continue
                     if target_talk and target_talk != self.schedule_talk_regex.match(
                         talk["url"]
                     ).group(1):

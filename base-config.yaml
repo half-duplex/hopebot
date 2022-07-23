@@ -14,11 +14,14 @@ help: >-
   Hello! I'm the HOPE core bot. To gain access to the HOPE
   chat rooms, just send me the token you were sent by email.
   It looks like this: `HOPE2022-EBC92A72-9151-885B-5526-FBE8D5A37F`
-# Who is allowed to use !stats and !load_tokens
+# Who is allowed to use bot admin commands
 owners:
   - "@bar:host.tld"
 # The Space to create presentation channels in
 talk_chat_space: "!foo:host.tld"
+# Shortcodes for talks that don't deserve chat rooms
+talk_chat_skip:
+  - 'NSLJQ9'
 talk_chat_moderators:
   - "@foo:host.tld"
 pretalx_json_url: "https://scheduler.hope.net/foo/schedule.json"
