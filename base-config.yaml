@@ -19,6 +19,8 @@ owners:
   - "@bar:host.tld"
 # The Space to create presentation channels in
 talk_chat_space: "!foo:host.tld"
+talk_chat_moderators:
+  - "@foo:host.tld"
 pretalx_json_url: "https://scheduler.hope.net/foo/schedule.json"
 # Where should !mod flags go?
 mod_room: "!foo:host.tld"

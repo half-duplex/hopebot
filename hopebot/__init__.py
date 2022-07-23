@@ -16,10 +16,15 @@ from mautrix.types import (
     JoinRule,
     JoinRulesStateEventContent,
     Membership,
+    PowerLevelStateEventContent,
     RoomCreatePreset,
     StateEvent,
 )
-from mautrix.types.event.state import JoinRestriction, JoinRestrictionType
+from mautrix.types.event.state import (
+    JoinRestriction,
+    JoinRestrictionType,
+    NotificationPowerLevels,
+)
 from mautrix.util.async_db import Scheme, UpgradeTable
 from mautrix.util.config import BaseProxyConfig
 
@@ -96,6 +101,7 @@ class Config(BaseProxyConfig):
         helper.copy("help")
         helper.copy("owners")
         helper.copy("talk_chat_space")
+        helper.copy("talk_chat_moderators")
         helper.copy("pretalx_json_url")
         helper.copy("mod_room")
 
@@ -266,6 +272,32 @@ class HopeBot(Plugin):
                         ),
                     ],
                 )
+                users = {evt.client.mxid: 100}
+                for user_id in self.config["talk_chat_moderators"]:
+                    users[user_id] = 50
+                for user_id in self.config["owners"]:
+                    users[user_id] = 100
+                power_level_content = PowerLevelStateEventContent(
+                    ban=50,
+                    events={
+                        EventType.ROOM_AVATAR: 100,
+                        EventType.ROOM_CANONICAL_ALIAS: 100,
+                        EventType.ROOM_ENCRYPTION: 100,
+                        EventType.ROOM_HISTORY_VISIBILITY: 100,
+                        EventType.ROOM_JOIN_RULES: 100,
+                        EventType.ROOM_NAME: 100,
+                        EventType.ROOM_POWER_LEVELS: 100,
+                        EventType("m.room.server_acl", EventType.Class.UNKNOWN): 100,
+                        EventType.ROOM_TOMBSTONE: 100,
+                        EventType.ROOM_TOPIC: 100,
+                    },
+                    invite=100,
+                    kick=50,
+                    notifications=NotificationPowerLevels(room=50),
+                    redact=50,
+                    state_default=50,
+                    users=users,
+                )
 
                 room_id = await conn.fetchval(
                     "SELECT room_id FROM talks WHERE talk_id = $1", talks[0]["id"]
@@ -276,7 +308,7 @@ class HopeBot(Plugin):
                     room_id = await evt.client.create_room(
                         name=room_name,
                         preset=RoomCreatePreset.TRUSTED_PRIVATE,
-                        invitees=[],  # ["@mal:hope.net"],  # self.config["owners"],
+                        invitees=[],
                         initial_state=[
                             StateEvent(
                                 type=EventType.SPACE_PARENT,
@@ -340,31 +372,7 @@ class HopeBot(Plugin):
                                 sender=None,
                                 timestamp=None,
                                 state_key=None,
-                                content={
-                                    "ban": 50,
-                                    "events": {
-                                        EventType.ROOM_AVATAR: 100,
-                                        EventType.ROOM_CANONICAL_ALIAS: 100,
-                                        EventType.ROOM_ENCRYPTION: 100,
-                                        EventType.ROOM_HISTORY_VISIBILITY: 100,
-                                        EventType.ROOM_NAME: 100,
-                                        EventType.ROOM_TOPIC: 100,
-                                        EventType.ROOM_POWER_LEVELS: 100,
-                                        "m.room.server_acl": 100,
-                                        EventType.ROOM_TOMBSTONE: 100,
-                                        EventType.ROOM_JOIN_RULES: 100,
-                                    },
-                                    "invite": 100,
-                                    "kick": 50,
-                                    # "notifications": {},
-                                    "redact": 50,
-                                    "state_default": 50,
-                                    "users": {
-                                        uid: 100
-                                        for uid in self.config["owners"]
-                                        + [evt.client.mxid]
-                                    },
-                                },
+                                content=power_level_content,
                             ),
                         ],
                     )
