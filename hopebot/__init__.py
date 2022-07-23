@@ -262,12 +262,20 @@ class HopeBot(Plugin):
                 room_id=room_id,
                 event_type=EventType.ROOM_POWER_LEVELS,
             )
-            power_level_evt.users[user] = 50
-            await evt.client.send_state_event(
-                room_id=room_id,
-                event_type=EventType.ROOM_POWER_LEVELS,
-                content=power_level_evt,
-            )
+            if power_level_evt.users[user] != 50:
+                power_level_evt.users[user] = 50
+                await evt.client.send_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_POWER_LEVELS,
+                    content=power_level_evt,
+                )
+
+            try:  # to invite them to the presenters space
+                await evt.client.invite_user(self.config["spaces"]["presenter"], user)
+            except (KeyError, MForbidden):
+                pass
+            else:
+                await evt.react("➕")
 
     @command.new(name="sync_talks")
     @command.argument("target_talk", required=False)
