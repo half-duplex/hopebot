@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING
 from asyncpg.exceptions import UniqueViolationError
 from maubot import Plugin
 from maubot.handlers import command, event
-from mautrix.errors.request import MForbidden, MNotFound
+from mautrix.errors.request import MForbidden, MNotFound, MRoomInUse
 from mautrix.types import (
+    CanonicalAliasStateEventContent,
     EventType,
     JoinRule,
     JoinRulesStateEventContent,
@@ -491,6 +492,62 @@ class HopeBot(Plugin):
                         room_id=room_id,
                         event_type=EventType.ROOM_POWER_LEVELS,
                         content=power_level_content,
+                    )
+
+                # Match aliases
+                aliases = [
+                    "#{}:hope.net".format(
+                        self.schedule_talk_regex.match(talk["url"]).group(1)
+                    )
+                    for talk in talks
+                ]
+                try:
+                    canonical_alias_evt = await evt.client.get_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_CANONICAL_ALIAS,
+                    )
+                    current_aliases = canonical_alias_evt.alt_aliases
+                    if canonical_alias_evt.canonical_alias:
+                        current_aliases = [
+                            canonical_alias_evt.canonical_alias
+                        ] + aliases
+                except MNotFound:
+                    current_aliases = []
+                # Except when I break stuff, we probably don't want to clear
+                # manually-created aliases
+                bad_aliases = set()  # set(current_aliases) - set(aliases)
+                for alias in bad_aliases:
+                    delay += 1
+                    LOGGER.debug(
+                        "Removing alias for %r (%r): %r", room_id, room_name, alias
+                    )
+                    room_shortcode = alias.split("#")[1].split(":")[0]
+                    await evt.client.remove_room_alias(room_shortcode)
+                missing_aliases = set(aliases) - set(current_aliases)
+                for alias in missing_aliases:
+                    delay += 1
+                    LOGGER.debug(
+                        "Adding alias for %r (%r): %r",
+                        room_id,
+                        room_name,
+                        alias,
+                    )
+                    room_shortcode = alias.split("#")[1].split(":")[0]
+                    try:
+                        await evt.client.add_room_alias(room_id, room_shortcode)
+                    except MRoomInUse:
+                        alias_evt = await evt.client.resolve_room_alias(alias)
+                        if alias_evt.room_id != room_id:
+                            await evt.client.remove_room_alias(room_shortcode)
+                            await evt.client.add_room_alias(room_id, room_shortcode)
+                if bad_aliases or missing_aliases:
+                    delay += 1
+                    await evt.client.send_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_CANONICAL_ALIAS,
+                        content=CanonicalAliasStateEventContent(
+                            canonical_alias=aliases[0], alt_aliases=aliases[1:]
+                        ),
                     )
 
                 # Match join rules
