@@ -95,17 +95,21 @@ def room_mention(
 
 class Config(BaseProxyConfig):
     def do_update(self, helper: ConfigUpdateHelper):
-        helper.copy("token_regex")
-        helper.copy("schedule_talk_regex")
-        helper.copy("enable_token_clearing")
-        helper.copy("spaces")
-        helper.copy("help")
-        helper.copy("owners")
-        helper.copy("talk_chat_space")
-        helper.copy("talk_chat_moderators")
-        helper.copy("pretalx_json_url")
-        helper.copy("mod_room")
-        helper.copy("ratelimit_multiplier")
+        options = [
+            "token_regex",
+            "schedule_talk_regex",
+            "enable_token_clearing",
+            "spaces",
+            "help",
+            "owners",
+            "talk_chat_space",
+            "talk_chat_moderators",
+            "pretalx_json_url",
+            "mod_room",
+            "ratelimit_multiplier",
+        ]
+        for option in options:
+            helper.copy(option)
 
 
 class HopeBot(Plugin):
