@@ -9,7 +9,7 @@ homepage = "https://github.com/half-duplex/hopebot"
 keywords = ["matrix", "maubot"]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.9,<3.11"
 PySide2 = "^5.15.2"
 numpy = "^1.23.1"
 perlin-numpy = {git = "https://github.com/pvigier/perlin-numpy"}
