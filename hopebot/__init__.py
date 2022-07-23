@@ -16,6 +16,7 @@ from mautrix.types import (
     EventType,
     JoinRule,
     JoinRulesStateEventContent,
+    MatrixURI,
     Membership,
     PowerLevelStateEventContent,
     RoomCreatePreset,
@@ -84,13 +85,12 @@ async def upgrade_db_v3(conn: Connection):
 def room_mention(
     room_id, event_id: str | None = None, text: str = "", html: bool = False
 ):
-    vias = "via=hope.net&via=matrix.org&via=fairydust.space"
-    event_str = ("/" + event_id) if event_id else ""
+    uri = MatrixURI.build(
+        room_id, event_id, ["hope.net", "matrix.org", "fairydust.space"]
+    )
     if html:
-        return "<a href='https://matrix.to/#/{}{}?{}'>{}</a>".format(
-            room_id, event_str, vias, text
-        )
-    return "[{}](https://matrix.to/#/{}{}?{})".format(text, room_id, event_str, vias)
+        return "<a href='{}'>{}</a>".format(uri, text)
+    return "[{}]({})".format(text, uri)
 
 
 class Config(BaseProxyConfig):
