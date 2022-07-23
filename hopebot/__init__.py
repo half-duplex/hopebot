@@ -459,7 +459,7 @@ class HopeBot(Plugin):
                 except MNotFound:
                     current_avatar = None
                 if not current_avatar:
-                    delay += 1
+                    delay += 2
                     LOGGER.debug(
                         "Setting avatar for for %r (%r)",
                         room_id,
