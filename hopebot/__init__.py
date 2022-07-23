@@ -255,7 +255,7 @@ class HopeBot(Plugin):
                     topic += "<br><a href='{2}'>{0} in {1}</a>".format(
                         date, talk["room"], talk["url"]
                     )
-                    topic_plain += "\n{} in {}, {}  ".format(
+                    topic_plain += "\n- {} in {}, {}  ".format(
                         date, talk["room"], talk["url"]
                     )
 
