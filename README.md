@@ -29,6 +29,8 @@ For bot owners, the following commands are available:
 - `!mark_unused token|hash` - Allow the token to be used again
 - `!token_info token|hash` - Show who redeemed a token and when
 - `!sync_talks` - Synchronize scheduled talks to rooms
+- `!speaker @foo:example.com [talk shortcode|link]` - Mark a user as a speaker
+  and give moderator permissions in that talk's room
 
 ## Contributions
 Contributions are welcome. They must be licensed under EUPL-1.2, linted with `flake8`, formatted with

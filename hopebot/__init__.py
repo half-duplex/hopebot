@@ -82,6 +82,17 @@ async def upgrade_db_v3(conn: Connection):
     await conn.execute("ALTER TYPE token_type ADD VALUE IF NOT EXISTS 'press'")
 
 
+@upgrade_table.register(description="Add speaker permission persistence")
+async def upgrade_db_v4(conn: Connection):
+    await conn.execute(
+        """CREATE TABLE speakers (
+            talk_id INTEGER NOT NULL,
+            user_id VARCHAR(256) NOT NULL,
+            CONSTRAINT speakers_pkey PRIMARY KEY (talk_id, user_id)
+        )"""
+    )
+
+
 def room_mention(
     room_id, event_id: str | None = None, text: str = "", html: bool = False
 ):
@@ -205,12 +216,71 @@ class HopeBot(Plugin):
 
         await evt.reply(response)
 
-    @command.new(name="sync_talks")
-    @command.argument("clear", required=False)
-    async def sync_talks(self, evt: MessageEvent, clear: bool):
+    @command.new(name="speaker")
+    @command.argument("user")
+    @command.argument("talk", required=False)
+    async def add_speaker(self, evt: MessageEvent, user: str, talk: str | None = None):
         if evt.sender not in self.config["owners"]:
-            LOGGER.warning("Attempt by non-owner %r to sync talks", evt.sender)
+            LOGGER.warning(
+                "Attempt by non-owner %r to set speaker: %r %r", evt.sender, user, talk
+            )
             return
+        talk_id = None
+        async with self.database.acquire() as conn:
+            if not talk:  # Not specified - use current channel
+                room_id = evt.room_id
+                talk_id = await conn.fetchval(
+                    "SELECT talk_id FROM talks WHERE room_id=$1", evt.room_id
+                )
+            else:
+                if talk.startswith("http"):  # Given link
+                    talk = self.schedule_talk_regex.match(talk).group(1)
+                # Else assume it's the shortcode
+                r = await conn.fetchrow(
+                    "SELECT talk_id, room_id FROM talks WHERE talk_shortcode=$1", talk
+                )
+                if r:
+                    talk_id, room_id = r
+
+            if not talk_id:
+                await evt.reply(
+                    "I couldn't figure out what talk they're the speaker for."
+                )
+                return
+            LOGGER.info("%r added %r as a speaker for %r", evt.sender, user, talk_id)
+            try:
+                await conn.execute(
+                    "INSERT INTO speakers (talk_id, user_id) VALUES ($1, $2)",
+                    talk_id,
+                    user,
+                )
+            except UniqueViolationError:
+                pass
+            await evt.react("✔️")
+
+            power_level_evt = await evt.client.get_state_event(
+                room_id=room_id,
+                event_type=EventType.ROOM_POWER_LEVELS,
+            )
+            power_level_evt.users[user] = 50
+            await evt.client.send_state_event(
+                room_id=room_id,
+                event_type=EventType.ROOM_POWER_LEVELS,
+                content=power_level_evt,
+            )
+
+    @command.new(name="sync_talks")
+    @command.argument("target_talk", required=False)
+    async def sync_talks(self, evt: MessageEvent, target_talk: str | None = None):
+        if evt.sender not in self.config["owners"]:
+            LOGGER.warning(
+                "Attempt by non-owner %r to sync talks %r",
+                evt.sender,
+                target_talk if target_talk else "(all)",
+            )
+            return
+        if target_talk.startswith("http"):  # Link to shortcode
+            target_talk = self.schedule_talk_regex.match(target_talk).group(1)
         await evt.reply("This will take a long time.")
 
         r = await self.http.get(self.config["pretalx_json_url"])
@@ -221,6 +291,10 @@ class HopeBot(Plugin):
         for day in conf["days"]:
             for talks in day["rooms"].values():
                 for talk in talks:
+                    if target_talk and target_talk != self.schedule_talk_regex.match(
+                        talk["url"]
+                    ).group(1):
+                        continue
 
                     # Shorten room names
                     if talk["room"] == "Other":
@@ -279,6 +353,11 @@ class HopeBot(Plugin):
                     ],
                 )
                 users = {evt.client.mxid: 100}
+                speakers = await self.database.fetch(
+                    "SELECT user_id FROM speakers WHERE talk_id=$1", talks[0]["id"]
+                )
+                for row in speakers:
+                    users[row["user_id"]] = 50
                 for user_id in self.config["talk_chat_moderators"]:
                     users[user_id] = 50
                 for user_id in self.config["owners"]:
@@ -746,7 +825,7 @@ class HopeBot(Plugin):
         token_match = self.token_regex.search(evt.content.body)
         talk_shortcodes = self.schedule_talk_regex.findall(evt.content.body)
 
-        if talk_shortcodes and not token_match:
+        if talk_shortcodes and not token_match and not evt.content.body[0] == "!":
             room_ids = [
                 await self.database.fetchval(
                     "SELECT room_id FROM talks WHERE talk_shortcode=$1", code
