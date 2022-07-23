@@ -185,9 +185,9 @@ class HopeBot(Plugin):
         for token_type in total:
             response += "Used {}: {}/{} ({:.2f}%)  \n".format(
                 token_type,
-                used[token_type],
+                used.get(token_type, 0),
                 total[token_type],
-                (used[token_type] / total[token_type] * 100)
+                (used.get(token_type, 0) / total[token_type] * 100)
                 if total[token_type] > 0
                 else 100,
             )
