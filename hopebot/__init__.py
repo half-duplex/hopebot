@@ -475,11 +475,23 @@ class HopeBot(Plugin):
                     )
 
                 # Match permissions
-                # power_levels = await evt.client.get_state_event(
-                #    room_id=room_id,
-                #    event_type=EventType.ROOM_POWER_LEVELS,
-                # )
-                # LOGGER.critical("PLs: %r", power_levels)
+                power_level_evt = await evt.client.get_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_POWER_LEVELS,
+                )
+                if power_level_evt != power_level_content:
+                    delay += 1
+                    LOGGER.debug(
+                        "Updating permissions for %r (%r), was: %r",
+                        room_id,
+                        room_name,
+                        power_level_evt,
+                    )
+                    await evt.client.send_state_event(
+                        room_id=room_id,
+                        event_type=EventType.ROOM_POWER_LEVELS,
+                        content=power_level_content,
+                    )
 
                 # Match join rules
                 current_join_rules_evt = await evt.client.get_state_event(
