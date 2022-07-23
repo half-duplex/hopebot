@@ -105,6 +105,7 @@ class Config(BaseProxyConfig):
         helper.copy("talk_chat_moderators")
         helper.copy("pretalx_json_url")
         helper.copy("mod_room")
+        helper.copy("ratelimit_multiplier")
 
 
 class HopeBot(Plugin):
@@ -571,8 +572,7 @@ class HopeBot(Plugin):
 
                 # TODO: match more room info - space membership? perms?
 
-                # Comment if using a ratelimit-exempt account
-                await sleep(delay * 2)
+                await sleep(delay * self.config.get("ratelimit_multiplier", 2))
         await evt.reply("Done!")
 
     async def create_avatar(self, client, seed):

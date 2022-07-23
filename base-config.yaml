@@ -24,3 +24,5 @@ talk_chat_moderators:
 pretalx_json_url: "https://scheduler.hope.net/foo/schedule.json"
 # Where should !mod flags go?
 mod_room: "!foo:host.tld"
+# Roughly: seconds delay per request for intensive processes
+ratelimit_multiplier: 2
