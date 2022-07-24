@@ -263,7 +263,7 @@ class HopeBot(Plugin):
                 room_id=room_id,
                 event_type=EventType.ROOM_POWER_LEVELS,
             )
-            if power_level_evt.users[user] != 50:
+            if power_level_evt.users.get(user, 0) != 50:
                 power_level_evt.users[user] = 50
                 await evt.client.send_state_event(
                     room_id=room_id,
