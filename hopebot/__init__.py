@@ -380,17 +380,21 @@ class HopeBot(Plugin):
                 power_level_content = PowerLevelStateEventContent(
                     ban=50,
                     events={
+                        EventType.REACTION: 50,  # Lock room
                         EventType.ROOM_AVATAR: 100,
                         EventType.ROOM_CANONICAL_ALIAS: 100,
                         EventType.ROOM_ENCRYPTION: 100,
                         EventType.ROOM_HISTORY_VISIBILITY: 100,
                         EventType.ROOM_JOIN_RULES: 100,
+                        EventType.ROOM_MESSAGE: 50,  # Lock room
                         EventType.ROOM_NAME: 100,
                         EventType.ROOM_POWER_LEVELS: 100,
+                        EventType.ROOM_REDACTION: 50,  # Lock room
                         EventType("m.room.server_acl", EventType.Class.UNKNOWN): 100,
                         EventType.ROOM_TOMBSTONE: 100,
                         EventType.ROOM_TOPIC: 100,
                     },
+                    events_default=50,
                     invite=100,
                     kick=50,
                     notifications=NotificationPowerLevels(room=50),
