@@ -25,7 +25,6 @@ Users can:
 - Say `!mod [message]` to request a moderator's presence
 
 For bot owners, the following commands are available:
-- `!adminhelp` - Links to this document
 - `!stats` - Show count of loaded and redeemed tokens
 - `!load_tokens ./hope-tokens-a.txt attendee [clear]` - Load another set of tokens,
   optionally truncating the table first

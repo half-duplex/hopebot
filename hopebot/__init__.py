@@ -141,14 +141,14 @@ class HopeBot(Plugin):
 
     @command.new()
     async def help(self, evt: MessageEvent):
-        await evt.reply(self.config["help"])
-
-    @command.new()
-    async def adminhelp(self, evt: MessageEvent):
-        await evt.reply(
-            "For a list of admin commands, see "
-            "https://github.com/half-duplex/hopebot/blob/main/README.md#usage"
-        )
+        if evt.sender in self.config["owners"]:
+            await evt.reply(
+                self.config["help"]
+                + "\n\nFor a list of admin commands, see "
+                + "https://github.com/half-duplex/hopebot/blob/main/README.md#usage"
+            )
+        else:
+            await evt.reply(self.config["help"])
 
     @command.new()
     async def version(self, evt: MessageEvent):
