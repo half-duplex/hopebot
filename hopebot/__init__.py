@@ -832,7 +832,6 @@ class HopeBot(Plugin):
             direct_rooms[evt.sender].append(evt.room_id)
             await evt.client.set_account_data(EventType.DIRECT, direct_rooms)
         await self.sync_direct_rooms(evt.client)
-        await evt.client.send_markdown(evt.room_id, self.config["help"])
 
     async def sync_direct_rooms(self, client):
         LOGGER.info("Resyncing direct rooms")
