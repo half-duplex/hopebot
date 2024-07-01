@@ -940,7 +940,7 @@ class HopeBot(Plugin):
                         "Please try again later, or report this problem to staff."
                     )
                 LOGGER.error(
-                    "Token from %r marked as %r but I don't know that space!",
+                    "Token from %r marked as %r but I don't know that space! %r",
                     evt.sender,
                     d["type"],
                     token,
