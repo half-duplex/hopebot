@@ -710,12 +710,18 @@ class HopeBot(Plugin):
         )
         async with self.database.acquire() as conn:
             await conn.execute("BEGIN TRANSACTION")
-            if clear == "clear":
+            if clear == "truncate":
                 if not self.config["enable_token_clearing"]:
                     await evt.reply("Token clearing is disabled, aborting.")
                     return
                 LOGGER.warning("Truncating table")
                 await conn.execute("TRUNCATE TABLE tokens")
+            elif clear == "clear":
+                if not self.config["enable_token_clearing"]:
+                    await evt.reply("Token clearing is disabled, aborting.")
+                    return
+                LOGGER.warning("Removing all %s tokens", token_type)
+                await conn.execute("DELETE FROM tokens WHERE type = $1", token_type)
             loaded = 0
             with open(filename, "r", encoding="utf-8-sig") as f:
                 for line in f:

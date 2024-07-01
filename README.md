@@ -26,8 +26,8 @@ Users can:
 
 For bot owners, the following commands are available:
 - `!stats` - Show count of loaded and redeemed tokens
-- `!load_tokens ./hope-tokens-a.txt attendee [clear]` - Load another set of tokens,
-  optionally truncating the table first
+- `!load_tokens ./hope-tokens-a.txt attendee [clear|truncate]` - Load a set of tokens,
+  optionally removing same-type (clear) or ALL (truncate) tokens first.
 - `!mark_unused token|hash` - Allow the token to be used again
 - `!token_info token|hash` - Show who redeemed a token and when
 - `!sync_talks` - Synchronize scheduled talks to rooms
