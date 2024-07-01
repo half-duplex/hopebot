@@ -756,7 +756,11 @@ class HopeBot(Plugin):
         if token_match:
             token_hash = sha256(token.encode()).digest()
         else:
-            token_hash = bytes.fromhex(token)
+            try:
+                token_hash = bytes.fromhex(token)
+            except ValueError:
+                await evt.reply("Sorry, that doesn't look like a valid token or hash.")
+                return
 
         async with self.database.acquire() as conn:
             await conn.execute("BEGIN TRANSACTION")
