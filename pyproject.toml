@@ -1,26 +1,37 @@
-[tool.poetry]
-name = "hopebot"
-version = "1.7.0"
-description = "A maubot plugin for the HOPE conference Matrix systems"
-authors = ["Trevor Bergeron <mal@sec.gd>"]
-license = "EUPL-1.2"
-readme = "README.md"
-homepage = "https://github.com/half-duplex/hopebot"
-keywords = ["matrix", "maubot"]
-
-[tool.poetry.dependencies]
-python = ">=3.9,<3.11"
-PySide2 = "^5.15.2"
-numpy = "^1.23.1"
-perlin-numpy = {git = "https://github.com/pvigier/perlin-numpy"}
-
-[tool.poetry.dev-dependencies]
-black = "^22.3.0"
-flake8 = "^4.0.1"
-flake8-future-import = "^0.4.6"
-flake8-import-order = "^0.18.1"
-flake8-type-checking = "^1.5.0"
-
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools~=70.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hopebot"
+version = "1.8.0"
+description = "A maubot plugin for the HOPE conference Matrix systems"
+maintainers = [
+    {name = "mal", email = "mal@sec.gd"},
+]
+authors = [
+    {name = "mal", email = "mal@sec.gd"},
+]
+readme = "README.md"
+keywords = ["matrix", "maubot"]
+classifiers = [
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
+]
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "PySide6~=6.7.2",
+    "numpy~=2.0.0",
+    "perlin-numpy",
+]
+
+[project.urls]
+Repository = "https://github.com/half-duplex/hopebot"
+
+[project.optional-dependencies]
+dev = [
+    "black~=24.4.2",
+    "flake8~=7.1.0",
+    "flake8-future-import~=0.4.7",
+    "flake8-import-order~=0.18.2",
+    "flake8-type-checking~=2.9.1",
+]

@@ -2,7 +2,5 @@
 max-line-length = 88
 import-order-style = google
 no-accept-encodings = True
-ignore =
-    W503,  # black
-    FI10,FI11,FI12,FI13,FI14,FI15,FI16,FI17,  # Unnecessary on py3.9+
-    FI58,  # Needed until py3.11
+ignore = W503,FI58,FI10,FI11,FI12,FI13,FI14,FI15,FI16,FI17
+exclude = env/*,venv/*,build/*

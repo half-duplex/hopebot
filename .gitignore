@@ -1,1 +1,6 @@
-poetry.lock
+__pycache__/
+*.py[cod]
+*.egg-info/
+env/
+venv/
+build/

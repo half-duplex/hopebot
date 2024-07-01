@@ -205,9 +205,11 @@ class HopeBot(Plugin):
                 token_type,
                 used.get(token_type, 0),
                 total[token_type],
-                (used.get(token_type, 0) / total[token_type] * 100)
-                if total[token_type] > 0
-                else 100,
+                (
+                    (used.get(token_type, 0) / total[token_type] * 100)
+                    if total[token_type] > 0
+                    else 100
+                ),
             )
         sum_used = sum(used.values())
         sum_total = sum(total.values())
