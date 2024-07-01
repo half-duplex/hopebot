@@ -1,5 +1,5 @@
 # Search all PMs for this token to process:
-token_regex: "HOPE2022-[0-9A-F]{8}-(:?[0-9A-F]{4}-){3}[0-9A-F]{10}"
+token_regex: "HOPE2024-[0-9A-F]{8}-(:?[0-9A-F]{4}-){3}[0-9A-F]{10}"
 # The URL format for talk links, capturing the shortcode
 schedule_talk_regex: "https://scheduler.hope.net/foo/talk/([a-z0-9]{5,})/"
 # Strongly recommended to set to false in prod
@@ -13,8 +13,8 @@ spaces:
 help: >-
   Hello! I'm the HOPE core bot. To gain access to the HOPE
   chat rooms, just send me the token you were sent by email.
-  It looks like this: `HOPE2022-EBC92A72-9151-885B-5526-FBE8D5A37F`
-# Who is allowed to use bot admin commands
+  It looks like this: `HOPE2024-EBC92A72-9151-885B-5526-FBE8D5A37F`
+# Allowed to use bot admin commands and given admin perms in talk chats
 owners:
   - "@bar:host.tld"
 # The Space to create presentation channels in

@@ -945,9 +945,9 @@ class HopeBot(Plugin):
                 if pm:
                     await evt.reply(
                         (
-                            "I couldn't invite you to the Space for {}s. "
+                            "I couldn't invite you to the space for {}s. "
                             "Are you already in it? Maybe you haven't "
-                            "accepted the invite - check the Spaces list on "
+                            "accepted the invite - check the spaces list on "
                             "the left or in the menu."
                         ).format(d["type"])
                     )
@@ -955,8 +955,8 @@ class HopeBot(Plugin):
             if pm or not d["used_at"]:  # PM, or not previously used
                 await evt.reply(
                     (
-                        "I've invited you to the Space for {}s!  \n"
-                        "You should see the invite in your Spaces list.  \n"
+                        "I've invited you to the space for {}s!  \n"
+                        "You should see the invite in your spaces list.  \n"
                         "Once you accept it, from there you can join the "
                         "rooms and spaces that interest you. Thanks for coming to HOPE!"
                     ).format(d["type"])
