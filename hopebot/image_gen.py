@@ -40,7 +40,7 @@ async def draw_flow_field(
     image = QPixmap(width, height)
     p = QPainter()
     p.begin(image)
-    p.setRenderHint(p.Antialiasing)
+    p.setRenderHint(QPainter.Antialiasing, True)
     hue = numpy.random.randint(0, 255)
     val = numpy.random.randint(0, 64)
     p.fillRect(0, 0, width, height, QColor.fromHsv(hue, 255, val, 255))
