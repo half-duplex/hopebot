@@ -24,6 +24,8 @@ talk_chat_skip:
   - 'NSLJQ9'
 talk_chat_moderators:
   - "@foo:host.tld"
+# Set talk chat message/react/redact permissions to 50 (moderator+)
+talk_chats_locked: false
 pretalx_json_url: "https://scheduler.hope.net/foo/schedule.json"
 # Where should !mod flags go?
 mod_room: "!foo:host.tld"

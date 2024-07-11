@@ -116,6 +116,7 @@ class Config(BaseProxyConfig):
             "talk_chat_space",
             "talk_chat_skip",
             "talk_chat_moderators",
+            "talk_chats_locked",
             "pretalx_json_url",
             "mod_room",
             "ratelimit_multiplier",
@@ -379,22 +380,20 @@ class HopeBot(Plugin):
                     users[user_id] = 50
                 for user_id in self.config["owners"]:
                     users[user_id] = 100
+                room_locked_power = 50 if self.config["talk_chats_locked"] else 0
                 power_level_content = PowerLevelStateEventContent(
                     ban=50,
                     events={
-                        EventType.REACTION: 0,
-                        #EventType.REACTION: 50,  # Lock room
+                        EventType.REACTION: room_locked_power,
                         EventType.ROOM_AVATAR: 100,
                         EventType.ROOM_CANONICAL_ALIAS: 100,
                         EventType.ROOM_ENCRYPTION: 100,
                         EventType.ROOM_HISTORY_VISIBILITY: 100,
                         EventType.ROOM_JOIN_RULES: 100,
-                        EventType.ROOM_MESSAGE: 0,
-                        #EventType.ROOM_MESSAGE: 50,  # Lock room
+                        EventType.ROOM_MESSAGE: room_locked_power,
                         EventType.ROOM_NAME: 100,
                         EventType.ROOM_POWER_LEVELS: 100,
-                        EventType.ROOM_REDACTION: 0,
-                        #EventType.ROOM_REDACTION: 50,  # Lock room
+                        EventType.ROOM_REDACTION: room_locked_power,
                         EventType("m.room.server_acl", EventType.Class.UNKNOWN): 100,
                         EventType.ROOM_TOMBSTONE: 100,
                         EventType.ROOM_TOPIC: 100,
