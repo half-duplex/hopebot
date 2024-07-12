@@ -40,7 +40,12 @@ if TYPE_CHECKING:
     from mautrix.util.config import ConfigUpdateHelper
 
 
-TITLE_XOFY_REGEX = re.compile(r"(.*?),? \(?(?:Day )?(?:\d+)(?:(?: of | ?/ ?)\d+)?\)?")
+TITLE_XOFY_REGEX = re.compile(
+    r"(.*?),? \((?:(?:Day )?(?:\d+)(?:(?: of | ?/ ?)\d+)?|(?:Fri|Sat|Sun) ONGOING)\)"
+)
+ROOM_SHORTEN_REGEX = re.compile(
+    r"^(?:The )?(.*?)( \(.*|/.*|Auditorium|Theat(?:er|re)|lage|race| ONGOING)*$"
+)
 LOGGER = logging.getLogger(__name__)
 upgrade_table = UpgradeTable()
 
@@ -327,12 +332,11 @@ class HopeBot(Plugin):
                         continue
 
                     # Shorten room names
-                    if talk["room"] == "Other":
+                    room = talk["room"]
+                    if room == "Other":
                         room_short = ""
-                    elif talk["room"].startswith("Workshop "):
-                        room_short = talk["room"].split(" ")[1]
-                    else:
-                        room_short = talk["room"].split(" ")[0]
+                    room_short = ROOM_SHORTEN_REGEX.fullmatch(room).group(1)
+                    room_short = room_short.replace(" ", "").replace("-", "")
 
                     title = talk["title"]
                     # Deduplicate "Foo (1 of 3)" titles
