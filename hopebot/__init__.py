@@ -293,7 +293,7 @@ class HopeBot(Plugin):
 
     @command.new(name="sync_talks")
     @command.argument("target_talk", required=False)
-    async def sync_talks(self, evt: MessageEvent, target_talk: str | None = None):
+    async def sync_talks(self, evt: MessageEvent, target_talk: str):
         if evt.sender not in self.config["owners"]:
             LOGGER.warning(
                 "Attempt by non-owner %r to sync talks %r",
@@ -312,7 +312,7 @@ class HopeBot(Plugin):
         data = await r.json()
         conf = data["schedule"]["conference"]
 
-        all_talks = {}
+        all_talks: dict[str, list[dict]] = {}
         for day in conf["days"]:
             for talks in day["rooms"].values():
                 for talk in talks:
