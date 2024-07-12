@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from mautrix.util.config import ConfigUpdateHelper
 
 
-TITLE_XOFY_REGEX = re.compile(r"(.*),? \(?(\d+) of \d+\)?")
+TITLE_XOFY_REGEX = re.compile(r"(.*?),? \(?(?:Day )?(?:\d+)(?:(?: of | ?/ ?)\d+)?\)?")
 LOGGER = logging.getLogger(__name__)
 upgrade_table = UpgradeTable()
 
