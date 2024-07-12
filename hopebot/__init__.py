@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from asyncio import Lock, sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 from hashlib import sha256
 import logging
 import re
@@ -296,6 +296,8 @@ class HopeBot(Plugin):
         if not target_talk:
             await evt.reply("This will take a long time.")
 
+        await evt.client.set_typing(evt.room_id, 1000 * 10)
+
         r = await self.http.get(self.config["pretalx_json_url"])
         data = await r.json()
         conf = data["schedule"]["conference"]
@@ -341,7 +343,14 @@ class HopeBot(Plugin):
                     all_talks[room_name] = all_talks.get(room_name, []) + [talk]
 
         async with self.database.acquire() as conn:
+            last_typing_status = datetime(1990, 1, 1)
+            typing_report_interval = timedelta(seconds=10)
             for room_name, talks_unsorted in all_talks.items():
+                # Set typing status so the user knows we're alive
+                if datetime.now() - last_typing_status > typing_report_interval:
+                    await evt.client.set_typing(evt.room_id, 1000 * 15)
+                    last_typing_status = datetime.now()
+
                 delay = 1
                 LOGGER.info("Syncing talks: %d of: %r", len(talks), room_name)
                 talks = sorted(talks_unsorted, key=lambda x: x["date"])
@@ -679,6 +688,8 @@ class HopeBot(Plugin):
                 # TODO: match more room info - space membership? perms?
 
                 await sleep(delay * self.config.get("ratelimit_multiplier", 2))
+
+        await evt.client.set_typing(evt.room_id, 0)
         await evt.reply("Done!")
 
     async def create_avatar(self, client, seed):
