@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hopebot"
-version = "1.9.1"
+version = "1.9.2"
 description = "A maubot plugin for the HOPE conference Matrix systems"
 maintainers = [
     {name = "mal", email = "mal@sec.gd"},

@@ -421,7 +421,7 @@ class HopeBot(Plugin):
                         EventType.ROOM_TOMBSTONE: 100,
                         EventType.ROOM_TOPIC: 100,
                     },
-                    events_default=50,
+                    events_default=room_locked_power,
                     invite=100,
                     kick=50,
                     notifications=NotificationPowerLevels(room=50),
