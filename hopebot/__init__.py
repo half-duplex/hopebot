@@ -93,6 +93,16 @@ async def upgrade_db_v4(conn: Connection):
     )
 
 
+@upgrade_table.register(description="allow duplicate tokens with different types")
+async def upgrade_db_v5(conn: Connection):
+    await conn.execute(
+        """ALTER TABLE tokens
+            DROP CONSTRAINT tokens_pkey,
+            ADD PRIMARY KEY (token_hash, type);
+        """
+    )
+
+
 def room_mention(
     room_id, event_id: str | None = None, text: str = "", html: bool = False
 ):
@@ -918,28 +928,45 @@ class HopeBot(Plugin):
         token_hash = sha256(token.encode()).digest()
         async with self.database.acquire() as conn:
             await conn.execute("BEGIN TRANSACTION")
-            d = await conn.fetchrow(
+            token_rows = await conn.fetch(
                 "SELECT * FROM tokens WHERE token_hash = $1 FOR UPDATE",
                 token_hash,
             )
 
-            if not d:
+            if not token_rows:
                 if pm:
                     await evt.reply("Sorry, that's not a valid token.")
                 return
-            if d["used_at"] is None:
+            if not all(row["used_at"] for row in token_rows):
                 LOGGER.info("Marking token used: %r %r", evt.sender, token)
                 await conn.execute(
                     (
                         "UPDATE tokens SET used_at = NOW(), used_by = $1 "
-                        "WHERE token_hash = $2"
+                        "WHERE token_hash = $2 AND used_at IS NULL"
                     ),
                     evt.sender,
                     token_hash,
                 )
             await conn.execute("COMMIT")
 
-        if d["used_at"] is None or d["used_by"] == evt.sender:
+        used_by = {row["used_by"] for row in token_rows}.pop()
+        if used_by and used_by != evt.sender:
+            LOGGER.info(
+                "Attempted token reuse: %r used %r's %r",
+                evt.sender,
+                used_by,
+                token,
+            )
+            if pm:
+                await evt.reply(
+                    "Sorry, that token has already been used by someone else. "
+                    "Are you on the correct account?"
+                )
+            return
+
+        invited_spaces = []
+        error_spaces = []
+        for d in token_rows:
             LOGGER.info(
                 "Inviting %r to %r (%r)",
                 evt.sender,
@@ -949,8 +976,10 @@ class HopeBot(Plugin):
             if d["type"] not in self.config["spaces"]:
                 if pm:
                     await evt.reply(
-                        "Sorry, your token is configured incorrectly! "
-                        "Please try again later, or report this problem to staff."
+                        (
+                            "Sorry, your {} token is configured incorrectly! "
+                            "Please try again later, or report this problem to staff."
+                        ).format(d["type"])
                     )
                 LOGGER.error(
                     "Token from %r marked as %r but I don't know that space! %r",
@@ -958,43 +987,41 @@ class HopeBot(Plugin):
                     d["type"],
                     token,
                 )
-                return
+                continue
             try:
                 await evt.client.invite_user(
                     self.config["spaces"][d["type"]], evt.sender
                 )
             except MForbidden:
                 if pm:
-                    await evt.reply(
-                        (
-                            "I couldn't invite you to the space for {}s. "
-                            "Are you already in it? Maybe you haven't "
-                            "accepted the invite - check the spaces list on "
-                            "the left or in the menu."
-                        ).format(d["type"])
-                    )
-                return
+                    error_spaces.append(d["type"])
+                continue
             if pm or not d["used_at"]:  # PM, or not previously used
-                await evt.reply(
-                    (
-                        "I've invited you to the space for {}s!  \n"
-                        "You should see the invite in your spaces list.  \n"
-                        "Once you accept it, from there you can join the "
-                        "rooms and spaces that interest you. Thanks for coming to HOPE!"
-                    ).format(d["type"])
-                )
-        else:
-            LOGGER.info(
-                "Attempted token reuse: %r used %r's (%r)",
-                evt.sender,
-                d["used_by"],
-                token,
-            )
-            if pm:
-                await evt.reply(
-                    "Sorry, that token has already been used by someone else. "
-                    "Are you on the correct account?"
-                )
+                invited_spaces.append(d["type"])
+
+        reply = ""
+        for space in invited_spaces:
+            reply += "I've invited you to the {} space!  \n".format(space)
+        if invited_spaces:
+            plural = len(invited_spaces) > 1
+            reply += (
+                "You should see the invite{} in your spaces list.  \n"
+                "Once you accept {}, from there you can join the "
+                "rooms and spaces that interest you. Thanks for coming to HOPE!"
+            ).format("s" if plural else "", "them" if plural else "it")
+            if error_spaces:
+                reply += "\n\n"
+        for space in error_spaces:
+            reply += "I couldn't invite you to the {} space.  \n".format(space)
+        if error_spaces:
+            plural = len(error_spaces) > 1
+            reply += (
+                "Are you already in {}? Maybe you haven't "
+                "accepted the invite{} - check the spaces list on "
+                "the left or in the menu."
+            ).format("them" if plural else "it", "s" if plural else "")
+        if reply:
+            await evt.reply(reply)
 
     @classmethod
     def get_config_class(cls) -> Type[BaseProxyConfig]:
