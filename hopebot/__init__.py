@@ -350,8 +350,11 @@ class HopeBot(Plugin):
                         time = datetime.fromisoformat(talk["date"])
                         if room_short:
                             room_short = "-" + room_short
-                        room_name = "{}{}: {}".format(
-                            time.strftime("%a-%H"), room_short, title
+                        room_name = "{}{}{}: {}".format(
+                            time.strftime("%a-%H"),
+                            "" if time.minute == 0 else time.minute,
+                            room_short,
+                            title,
                         )
 
                     all_talks[room_name] = all_talks.get(room_name, []) + [talk]
