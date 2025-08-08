@@ -78,3 +78,6 @@ exclude_gitignore = true
 
 [tool.setuptools]
 packages = ["hopebot"]
+
+[tool.uv.sources]
+perlin-numpy = { git = "https://github.com/pvigier/perlin-numpy" }
