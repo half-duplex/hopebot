@@ -75,3 +75,6 @@ exclude_gitignore = true
 #warn_return_any = true
 #show_error_codes = true
 #warn_unused_ignores = true
+
+[tool.setuptools]
+packages = ["hopebot"]

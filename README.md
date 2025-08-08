@@ -63,25 +63,7 @@ To prepare a conference:
 - Update the rest of the bot config (token format, admins, etc)
 
 ## Tools
-Generate 1,000 testing tokens (fixed prefix, any numbers suffix)
-```sh
-start="`tr -cd '0-9A-F' </dev/urandom | fold -w27 | head -n1 \
-  | sed -re 's/^(.{8})(.{4})(.{4})(.{4})(.{7})$/HOPE2024-\1-\2-\3-\4-\5/'`"
-echo "${start}___"
-for id in `seq -w 0 999` ; do
-    echo -n "$start$id" | sha256sum
-done | cut -d' ' -f1 >/tmp/testtokens.txt
-```
-
-Generate 10,000 real tokens (takes ~20 sec):
-```sh
-tr -cd '0-9A-F' </dev/urandom | fold -w30 | head -n10000 \
-  | sed -re 's/^(.{8})(.{4})(.{4})(.{4})(.{10})$/HOPE2024-\1-\2-\3-\4-\5/' \
-  | while read token ; do \
-      echo -n "$token," ; \
-      echo -n "$token" | sha256sum ; \
-    done | cut -d' ' -f1 >hopetokens.csv
-```
+Generate tokens: see `contrib/make_tokens.sh`
 
 ## Contributions
 Contributions are welcome. They must be licensed under EUPL-1.2, linted with `flake8`, formatted with
