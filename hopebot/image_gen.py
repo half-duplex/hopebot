@@ -20,6 +20,7 @@ from PySide6.QtCore import QBuffer, QPointF
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication
 
+
 environ["QT_QPA_PLATFORM"] = "offscreen"
 environ["XDG_RUNTIME_DIR"] = "/tmp/runtime-hopebot"
 lock = Lock()

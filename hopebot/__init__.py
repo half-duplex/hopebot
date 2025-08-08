@@ -32,6 +32,7 @@ from mautrix.util.config import BaseProxyConfig
 
 from .image_gen import draw_flow_field
 
+
 if TYPE_CHECKING:
     from typing import Type
 
