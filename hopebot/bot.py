@@ -18,6 +18,7 @@ from mautrix.types import (
     JoinRule,
     JoinRulesStateEventContent,
     Membership,
+    Obj,
     PowerLevelStateEventContent,
     RoomAlias,
     RoomAvatarStateEventContent,
@@ -415,19 +416,26 @@ class HopeBot(Plugin):
                             ),
                             StrippedStateEvent(
                                 type=EventType.ROOM_TOPIC,
-                                content={  # RoomTopicStateEventContent can't do html too
-                                    "topic": topic_plain,
-                                    "m.topic": [
-                                        {
-                                            "mimetype": "text/html",
-                                            "body": topic,
+                                # RoomTopicStateEventContent can't do html too
+                                # **{} so I can pass m.topic
+                                # https://spec.matrix.org/latest/client-server-api/#mroomtopic
+                                content=Obj(
+                                    **{
+                                        "topic": topic_plain,
+                                        "m.topic": {
+                                            "m.text": [
+                                                {
+                                                    "mimetype": "text/html",
+                                                    "body": topic,
+                                                },
+                                                {
+                                                    "mimetype": "text/plain",
+                                                    "body": topic_plain,
+                                                },
+                                            ],
                                         },
-                                        {
-                                            "mimetype": "text/plain",
-                                            "body": topic_plain,
-                                        },
-                                    ],
-                                },
+                                    }
+                                ),
                             ),
                             StrippedStateEvent(
                                 type=EventType.ROOM_AVATAR,
