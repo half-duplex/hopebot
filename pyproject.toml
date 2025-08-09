@@ -1,6 +1,6 @@
 [project]
 name = "hopebot"
-version = "1.10.0pre1"
+version = "2.0.0pre3"
 description = "A maubot plugin for the HOPE conference Matrix systems"
 maintainers = [
     {name = "mal", email = "hopebot@sec.gd"},

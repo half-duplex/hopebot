@@ -16,6 +16,8 @@ CREATE DATABASE hopebot OWNER hopebot;
 - Authenticate maubot to Matrix with `mbc auth --update-client`
 - Clone this repository, and with the virtualenv active, from inside this folder run `mbc build --upload`
 - From the web panel, configure the maubot client and create an Instance for this plugin, then configure it.
+- To update the "prod" instance, remove ".beta" from the `id` field of
+  `maubot.yaml` before uploading
 
 ## Account Setup
 The bot will not be able to operate without modifying the default rate limits.
@@ -61,9 +63,9 @@ To prepare a conference:
   - Invite users = Admin
 - Put the space and room IDs into appropriate places in the bot config
 - Update the rest of the bot config (token format, admins, etc)
-
-## Tools
-Generate tokens: see `contrib/make_tokens.sh`
+- Generate tokens with `contrib/make_tokens.sh`, load with `!load_tokens`
+- If one token type (e.g. presenter) should also grant access to another
+  space (e.g. attendee), load the list a second time with the other type.
 
 ## Contributions
 Contributions are welcome. They must be licensed under EUPL-1.2, linted with `flake8`, formatted with

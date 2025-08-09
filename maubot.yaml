@@ -1,6 +1,6 @@
-maubot: 0.3.1
+maubot: 0.5.2
 id: gd.sec.hopebot.beta
-version: 1.10.0pre1
+version: 2.0.0pre3
 license: EUPL-1.2
 modules:
   - hopebot
