@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 upgrade_table = UpgradeTable()
 
 
-@upgrade_table.register(description="Initial schema")
+@upgrade_table.register(description="Initial schema")  # type: ignore
 async def upgrade_db_v1(conn: Connection, scheme: Scheme):
     if scheme != Scheme.POSTGRES:
         LOGGER.error(
@@ -34,7 +34,7 @@ async def upgrade_db_v1(conn: Connection, scheme: Scheme):
     )
 
 
-@upgrade_table.register(description="Add talk chat persistence")
+@upgrade_table.register(description="Add talk chat persistence")  # type: ignore
 async def upgrade_db_v2(conn: Connection):
     await conn.execute(
         """CREATE TABLE talks (
@@ -45,12 +45,12 @@ async def upgrade_db_v2(conn: Connection):
     )
 
 
-@upgrade_table.register(description="Add press token type")
+@upgrade_table.register(description="Add press token type")  # type: ignore
 async def upgrade_db_v3(conn: Connection):
     await conn.execute("ALTER TYPE token_type ADD VALUE IF NOT EXISTS 'press'")
 
 
-@upgrade_table.register(description="Add speaker permission persistence")
+@upgrade_table.register(description="Add speaker permission persistence")  # type: ignore
 async def upgrade_db_v4(conn: Connection):
     await conn.execute(
         """CREATE TABLE speakers (
@@ -61,7 +61,7 @@ async def upgrade_db_v4(conn: Connection):
     )
 
 
-@upgrade_table.register(description="Allow duplicate tokens with different types")
+@upgrade_table.register(description="Allow duplicate tokens with different types")  # type: ignore
 async def upgrade_db_v5(conn: Connection):
     await conn.execute(
         """ALTER TABLE tokens
@@ -71,7 +71,7 @@ async def upgrade_db_v5(conn: Connection):
     )
 
 
-@upgrade_table.register(description="Prepare for automatic talk announce/suggest")
+@upgrade_table.register(description="Prepare for automatic talk announce/suggest")  # type: ignore
 async def upgrade_db_v6(conn: Connection):
     await conn.execute(
         """
@@ -82,4 +82,11 @@ async def upgrade_db_v6(conn: Connection):
         CREATE INDEX start_ts_idx ON talks (start_ts);
         CREATE INDEX end_ts_idx ON talks (end_ts);
         """
+    )
+
+
+@upgrade_table.register(description="Also save talk location")  # type: ignore
+async def upgrade_db_v7(conn: Connection):
+    await conn.execute(
+        """ALTER TABLE talks ADD COLUMN location character varying(128);"""
     )

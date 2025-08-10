@@ -1,6 +1,6 @@
 [project]
 name = "hopebot"
-version = "2.0.0pre3"
+version = "2.0.0"
 description = "A maubot plugin for the HOPE conference Matrix systems"
 maintainers = [
     {name = "mal", email = "hopebot@sec.gd"},
@@ -19,6 +19,7 @@ dependencies = [
     "numpy~=2.0",
     "perlin-numpy~=0.0.1",
     "PySide6~=6.9",
+    "python-dateutil~=2.9",
 ]
 
 [project.urls]
@@ -32,8 +33,9 @@ dev = [
     "flake8-isort ~= 6.1",
     "flake8-pyproject ~= 1.2",
     "flake8-type-checking ~= 3.0",
-    "mypy ~= 1.16",
+    "mypy ~= 1.17.1",
     "asyncpg-stubs~=0.30.2",
+    "types-python-dateutil~=2.9",
 ]
 
 [build-system]

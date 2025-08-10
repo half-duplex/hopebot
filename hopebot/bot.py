@@ -1,15 +1,24 @@
 from __future__ import annotations
 
-from asyncio import Lock, sleep
+from asyncio import (
+    CancelledError as AsyncioCancelledError,
+    create_task,
+    Lock,
+    sleep,
+)
 from dataclasses import fields
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from hashlib import sha256
 import re
 from typing import TYPE_CHECKING
 
+from asyncpg import Record
 from asyncpg.exceptions import UniqueViolationError
+from dateutil import tz
 from maubot.handlers import command, event
+from maubot.matrix import MaubotMessageEvent
 from maubot.plugin_base import Plugin
+from mautrix.api import Method, Path
 from mautrix.errors.request import MForbidden, MNotFound, MRoomInUse
 from mautrix.types import (
     CanonicalAliasStateEventContent,
@@ -37,15 +46,14 @@ from mautrix.types.event.state import (
 from .config import Config
 from .db import upgrade_table
 from .image_gen import draw_flow_field
-from .types import Talk, TalkShortcode
+from .types import Talk, TalkShortcode, TalkSpaceRoomCache
 from .util import room_mention
 
 
 if TYPE_CHECKING:
     from typing import Type
 
-    from maubot.matrix import MaubotMatrixClient, MaubotMessageEvent
-    from mautrix.types import RoomID, UserID
+    from mautrix.types import UserID
     from mautrix.util.async_db import UpgradeTable
     from mautrix.util.config import BaseProxyConfig
 
@@ -53,8 +61,12 @@ if TYPE_CHECKING:
 class HopeBot(Plugin):
     direct_rooms: dict[str, list[RoomID]] = {}
     direct_update_lock = Lock()
+    talk_cache: list[Talk] = []
+    talk_cache_lock = Lock()
+    talk_cache_time = datetime(1970, 1, 1, tzinfo=UTC)
+    talk_space_room_cache: dict[RoomID, TalkSpaceRoomCache] = {}
 
-    async def start(self):
+    async def start(self) -> None:
         if not self.config:
             raise Exception("Config not initialized")
         self.config.load_and_update()
@@ -66,6 +78,229 @@ class HopeBot(Plugin):
             self.config["schedule_talk_regex"],
             re.IGNORECASE,
         )
+        self.tz = tz.gettz(self.config["timezone"])
+        self.talk_timer_task = create_task(self.talk_timer_loop())
+
+    async def stop(self) -> None:
+        self.talk_timer_task.cancel()
+
+    async def talk_timer_loop(self) -> None:
+        self.log.debug("Starting talk timer loop")
+        try:
+            while True:
+                now = datetime.now(UTC)
+                next_run = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
+                await sleep((next_run - now).total_seconds())
+                await self.schedule_talk_pins()
+        except AsyncioCancelledError:
+            self.log.debug("Stopping talk timer loop")
+        except Exception:
+            self.log.exception("Talk timer loop exception")
+
+    async def space_set_child(
+        self,
+        space: RoomID,
+        child: RoomID,
+        order: str | None = None,
+        suggested=False,
+        present=True,
+    ):
+        content = SpaceChildStateEventContent()
+        if present:
+            content.via = [child.split(":")[1]]
+            content.suggested = suggested
+            content.order = order
+        await self.client.send_state_event(space, EventType.SPACE_CHILD, content, child)
+
+    async def schedule_talk_pins(self) -> None:
+        if not self.config or not self.database:
+            raise Exception("Config or database not initialized")
+        self.log.debug("Updating talk space pins")
+
+        now = datetime.now(UTC)
+        # now += timedelta(days=6, hours=15, minutes=0)
+        soon = now + timedelta(minutes=10)
+        earlier = now - timedelta(minutes=11)
+
+        talks = {
+            RoomID(v["room_id"]): v
+            for v in await self.database.fetch(
+                """SELECT room_id, start_ts, end_ts, talk_title, location FROM talks"""
+            )
+        }
+        talks_nowish = {
+            k: v
+            for k, v in talks.items()
+            if v["start_ts"] < soon and v["end_ts"] > earlier
+        }
+        self.log.info(
+            "There's %s nowish (%r) talks: %r",
+            len(talks_nowish),
+            now.isoformat(),
+            talks_nowish.values(),
+        )
+
+        invalidate_cache = False
+        talks_to_announce: list[Record] = []
+        talks_space = await self.get_space_hierarchy(self.config["rooms"]["talks"])
+        livetalks_space = None
+        if "livetalks" in self.config["rooms"]:
+            livetalks_space = await self.get_space_hierarchy(
+                self.config["rooms"]["livetalks"]
+            )
+        for room_id, alltalks_child_state in talks_space.child_states.items():
+            alltalks_child_content = alltalks_child_state.content
+
+            talk = talks[room_id]
+            started = talk["start_ts"] < now
+            recent_start = started and talk["start_ts"] > now - timedelta(hours=1)
+            ended = talk["end_ts"] < now
+            live = started and not ended
+            nowish = room_id in talks_nowish
+
+            order_set = (
+                "t4"
+                if ended
+                else "t3" if not started else "t2" if recent_start else "t1"
+            )
+            expect_order = "{}_{:012d}".format(
+                order_set, int(talk["start_ts"].timestamp())
+            )
+            if (
+                alltalks_child_content.order != expect_order
+                or alltalks_child_content.suggested != nowish
+            ):
+                self.log.debug("Updating talk space child state for %r", room_id)
+                invalidate_cache = True
+                await self.space_set_child(
+                    self.config["rooms"]["talks"],
+                    room_id,
+                    order=expect_order,
+                    suggested=nowish,
+                )
+
+            if livetalks_space:
+                in_livetalks = room_id in livetalks_space.child_states
+                if in_livetalks or nowish:
+                    if (
+                        not in_livetalks
+                        or not nowish
+                        or expect_order
+                        != livetalks_space.child_states[room_id].content.order
+                    ):
+                        self.log.debug(
+                            "Updating live talk space child state for %r", room_id
+                        )
+                        invalidate_cache = True
+                        await self.space_set_child(
+                            self.config["rooms"]["livetalks"],
+                            room_id,
+                            order=expect_order,
+                            present=nowish,
+                        )
+
+            # If new alltalks pin: notify
+            if nowish and not alltalks_child_content.suggested:
+                # Don't post in announcements if it's already live
+                if live or ended:
+                    self.log.debug(
+                        "Not announcing %r: start %r is before now %r",
+                        talk["talk_title"],
+                        talk["start_ts"].astimezone(self.tz),
+                        now.astimezone(self.tz),
+                    )
+                    continue
+
+                state_text = "live" if live else "starting soon"
+                message = "{} is {}! {}, from {} to {}. @room".format(
+                    talk["talk_title"],
+                    state_text,
+                    talk["location"],
+                    talk["start_ts"].astimezone(self.tz).strftime("%H:%M"),
+                    talk["end_ts"].astimezone(self.tz).strftime("%H:%M"),
+                )
+                await self.client.send_text(room_id, html=message)
+
+                talks_to_announce.append(talk)
+
+        if invalidate_cache:
+            self.talk_space_room_cache.pop(self.config["rooms"]["talks"])
+            if livetalks_space:
+                self.talk_space_room_cache.pop(self.config["rooms"]["livetalks"])
+
+        if len(talks_to_announce) > 0:
+            announcements_room_message = (
+                "Talks and workshops starting soon:\n"
+                + "\n".join(
+                    [
+                        "<b>{}</b> in {} from {} to {}".format(
+                            room_mention(
+                                talk["room_id"], text=talk["talk_title"], html=True
+                            ),
+                            talk["location"],
+                            talk["start_ts"].astimezone(self.tz).strftime("%H:%M"),
+                            talk["end_ts"].astimezone(self.tz).strftime("%H:%M"),
+                        )
+                        for talk in sorted(
+                            talks_to_announce, key=lambda t: t["start_ts"]
+                        )
+                    ]
+                )
+            )
+            await self.client.send_text(
+                self.config["rooms"]["announcements"],
+                html=announcements_room_message.replace("\n", "\n<br>"),
+            )
+
+    async def get_talks(self) -> list[Talk]:
+        if not self.config:
+            raise Exception("Config not initialized")
+        now = datetime.now(UTC)
+        if now - self.talk_cache_time >= timedelta(minutes=15):
+            async with self.talk_cache_lock:
+                talk_class_fields = [f.name for f in fields(Talk)]
+                r = await self.http.get(self.config["pretalx_json_url"])
+                data = await r.json()
+                conf = data["schedule"]["conference"]
+                self.talk_cache = [
+                    Talk(**{k: v for k, v in talk.items() if k in talk_class_fields})
+                    for day in conf["days"]
+                    for room in day["rooms"].values()
+                    for talk in room
+                ]
+                self.talk_cache_time = now
+        return self.talk_cache
+
+    async def get_space_hierarchy(self, space: RoomID) -> TalkSpaceRoomCache:
+        now = datetime.now(UTC)
+        if space not in self.talk_space_room_cache:
+            self.talk_space_room_cache[space] = TalkSpaceRoomCache()
+        async with self.talk_space_room_cache[space].lock:
+            if now - self.talk_space_room_cache[space].time >= timedelta(minutes=15):
+                self.talk_space_room_cache[space] = TalkSpaceRoomCache()
+                path = Path.v1.rooms[space].hierarchy
+                response = await self.client.api.request(
+                    Method("GET"),
+                    path,
+                    query_params={"limit": "50", "max_depth": "0"},
+                )
+                resp_rooms = response["rooms"]
+                resp_space = [room for room in resp_rooms if room["room_id"] == space][
+                    0
+                ]
+                self.talk_space_room_cache[space].space = resp_space
+                child_states = [
+                    StrippedStateEvent.deserialize(c)
+                    for c in resp_space["children_state"]
+                ]
+                self.talk_space_room_cache[space].child_states = {
+                    RoomID(c.state_key): c for c in child_states
+                }
+                self.talk_space_room_cache[space].children = {
+                    RoomID(r["room_id"]): r for r in resp_rooms if r["room_id"] != space
+                }
+                self.talk_space_room_cache[space].time = now
+        return self.talk_space_room_cache[space]
 
     @command.new()
     async def help(self, evt: MaubotMessageEvent):
@@ -221,8 +456,59 @@ class HopeBot(Plugin):
             else:
                 await evt.react("➕")
 
-    async def sync_talk(self, client: MaubotMatrixClient, shortcode: TalkShortcode):
-        pass
+    @command.new(name="order")
+    @command.argument("space")
+    @command.argument("room")
+    @command.argument("order", required=False)
+    async def set_space_order(
+        self, evt: MaubotMessageEvent, space: RoomID, room: RoomID, order: str | None
+    ):
+        if not self.config:
+            raise Exception("config not initialized")
+        if evt.sender not in self.config["owners"]:
+            await evt.react("💩")
+            return
+
+        if space[0] not in "!#":
+            if space not in self.config["rooms"]:
+                await evt.reply("Unknown space")
+                return
+            space = RoomID(self.config["rooms"][space])
+
+        if room[0] not in "!#":
+            if room == "here":
+                room = evt.room_id
+            elif room in self.config["rooms"]:
+                room = RoomID(self.config["rooms"][room])
+            else:
+                await evt.reply("Unknown room")
+                return
+
+        try:
+            space_child_evt = await evt.client.get_state_event(
+                room_id=space,
+                state_key=room,
+                event_type=EventType.SPACE_CHILD,
+            )
+        except MForbidden:
+            await evt.reply("Something went wrong. Are your space/room IDs valid?")
+            self.log.exception("Exception in set_space_order")
+            return
+        self.log.info(
+            "set_space_order: %r set %r -> %r order to %r",
+            evt.sender,
+            space,
+            room,
+            order,
+        )
+        space_child_evt.order = order
+        await evt.client.send_state_event(
+            space,
+            EventType.SPACE_CHILD,
+            space_child_evt,
+            room,
+        )
+        await evt.react("✔️")
 
     @command.new(name="op")
     @command.argument("room", required=False)
@@ -295,25 +581,15 @@ class HopeBot(Plugin):
             await evt.reply("I'm configured to skip that talk.")
             return
 
+        status_msg = None
         if not target_talk:  # All
-            await evt.reply("This will take a long time.")
+            status_msg_evt_id = await evt.reply("This will take a long time...")
+            status_msg = MaubotMessageEvent(
+                await self.client.get_event(evt.room_id, status_msg_evt_id), self.client
+            )
 
-        last_typing_report = datetime.now()
-        await evt.client.set_typing(evt.room_id, 1000 * 15)
-
-        r = await self.http.get(self.config["pretalx_json_url"])
-        data = await r.json()
-        conf = data["schedule"]["conference"]
-
-        talk_class_fields = [f.name for f in fields(Talk)]
-        all_talks_list = [
-            Talk(**{k: v for k, v in talk.items() if k in talk_class_fields})
-            for day in conf["days"]
-            for room in day["rooms"].values()
-            for talk in room
-        ]
         chat_talks: dict[str, list[Talk]] = {}
-        for talk in all_talks_list:
+        for talk in await self.get_talks():
             # Configured to skip, or not the one we want?
             if talk.shortcode in self.config["talk_chat_skip"]:
                 continue
@@ -324,7 +600,6 @@ class HopeBot(Plugin):
 
             chat_talks[talk.chat_name] = chat_talks.get(talk.chat_name, []) + [talk]
 
-        typing_report_interval = timedelta(seconds=10)
         async with self.database.acquire() as conn:
             for talk_set_idx, talk_set_unsorted in enumerate(chat_talks.values()):
                 # Sort for determinism (earliest is the one that gets the chat room, etc)
@@ -339,10 +614,12 @@ class HopeBot(Plugin):
                     len(talk_set),
                 )
 
-                # Refresh typing status so the user knows we're alive
-                if datetime.now() - last_typing_report > typing_report_interval:
-                    await evt.client.set_typing(evt.room_id, 1000 * 15)
-                    last_typing_report = datetime.now()
+                if not target_talk and status_msg:
+                    await status_msg.edit(
+                        "This will take a long time. Synced {} of {}...".format(
+                            talk_set_idx, len(chat_talks)
+                        )
+                    )
 
                 # API backoff
                 delay = 1
@@ -350,7 +627,7 @@ class HopeBot(Plugin):
                 topic = talk_set[0].abstract + "<br>"
                 topic_plain = talk_set[0].abstract + "\n"
                 for talk in talk_set:
-                    date = talk.start.strftime("%a %H:%M %Z")
+                    date = talk.start.astimezone(self.tz).strftime("%a %H:%M")
                     topic += "<br><a href='{2}'>{0} in {1}</a>".format(
                         date, talk.room, talk.url
                     )
@@ -416,24 +693,32 @@ class HopeBot(Plugin):
                     talk_set
                 ):  # [0] last, to use those IDs for the set
                     row = await conn.fetchrow(
-                        """SELECT room_id, start_ts, end_ts, talk_title
+                        """SELECT room_id, start_ts, end_ts, talk_title, location
                         FROM talks WHERE talk_id = $1""",
                         talk.id,
                     )
                     if row is None:
                         continue
-                    room_id, start, end, title = row
+                    room_id, start, end, title, location = row
 
                     # Check times
-                    if start != talk.start or end != talk.end or title != talk.title:
-                        self.log.debug("Updating start/end/title for $r", talk.id)
+                    if (
+                        start != talk.start
+                        or end != talk.end
+                        or title != talk.title
+                        or location != talk.room
+                    ):
+                        self.log.debug(
+                            "Updating start/end/title/location for $r", talk.id
+                        )
                         await conn.execute(
                             """UPDATE talks
-                            SET (start_ts, end_ts, talk_title) = ($1, $2, $3)
-                            WHERE talk_id = $4""",
+                            SET (start_ts, end_ts, talk_title, location) = ($1, $2, $3, $4)
+                            WHERE talk_id = $5""",
                             talk.start,
                             talk.end,
                             talk.title,
+                            talk.room,
                             talk.id,
                         )
 
@@ -505,8 +790,9 @@ class HopeBot(Plugin):
                     self.log.info("Created room %r for %r", room_id, chat_name)
                     await conn.executemany(
                         """INSERT INTO talks
-                            (talk_id, talk_shortcode, room_id, start_ts, end_ts, talk_title)
-                            VALUES ($1, $2, $3, $4, $5, $6)""",
+                            (talk_id, talk_shortcode, room_id, start_ts,
+                                end_ts, talk_title, location)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7)""",
                         (
                             (
                                 talk.id,
@@ -515,9 +801,15 @@ class HopeBot(Plugin):
                                 talk.start,
                                 talk.end,
                                 talk.title,
+                                talk.room,
                             )
                             for talk in talk_set
                         ),
+                    )
+
+                if not room_id:
+                    raise Exception(
+                        "Impossible! I made it past room find/create without a room_id"
                     )
 
                 # Match room name
@@ -554,19 +846,23 @@ class HopeBot(Plugin):
                     await evt.client.send_state_event(
                         room_id=room_id,
                         event_type=EventType.ROOM_TOPIC,
-                        content={
-                            "topic": topic_plain,
-                            "m.topic": [
-                                {
-                                    "mimetype": "text/html",
-                                    "body": topic,
+                        content=Obj(
+                            **{
+                                "topic": topic_plain,
+                                "m.topic": {
+                                    "m.text": [
+                                        {
+                                            "mimetype": "text/html",
+                                            "body": topic,
+                                        },
+                                        {
+                                            "mimetype": "text/plain",
+                                            "body": topic_plain,
+                                        },
+                                    ],
                                 },
-                                {
-                                    "mimetype": "text/plain",
-                                    "body": topic_plain,
-                                },
-                            ],
-                        },
+                            }
+                        ),
                     )
 
                 # Set avatar
@@ -632,7 +928,9 @@ class HopeBot(Plugin):
                     current_aliases = []
                 # Except when I break stuff, we probably don't want to clear
                 # manually-created aliases
-                bad_aliases = set()  # set(current_aliases) - set(aliases)
+                bad_aliases: set[RoomAlias] = (
+                    set()
+                )  # set(current_aliases) - set(aliases)
                 for alias in bad_aliases:
                     delay += 1
                     self.log.debug(

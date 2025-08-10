@@ -34,3 +34,4 @@ talk_chats_locked: false
 pretalx_json_url: "https://scheduler.hope.net/foo/schedule.json"
 # Roughly: seconds delay per request for intensive processes
 ratelimit_multiplier: 2
+timezone: America/New_York

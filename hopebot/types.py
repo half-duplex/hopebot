@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from asyncio import Lock
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import logging
 import re
 from string import ascii_uppercase, digits
@@ -9,13 +10,13 @@ from typing import NewType, TYPE_CHECKING
 from urllib.parse import urlparse
 
 
-# from .bot import aaaaaaa
-
 if TYPE_CHECKING:
     from typing import Any, Dict, List
 
+    from mautrix.types import RoomID, StrippedStateEvent
+
 TITLE_XOFY_REGEX = re.compile(
-    r"(.*?),? \((?:(?:Day )?(?:\d+)(?:(?: of | ?/ ?)\d+)?|(?:Fri|Sat|Sun) ONGOING)\)"
+    r"(.*?),? \((?:(?:(?:Day|[Pp]art) )?(?:\d+)(?:(?: of | ?/ ?)\d+)?|(?:Fri|Sat|Sun) ONGOING)\)"
 )
 ROOM_SHORTEN_REGEX = re.compile(
     r"^(?:The )?(.*?)( \(.*|/.*|Auditorium|Theat(?:er|re)|lage|race| ONGOING)*$"
@@ -102,12 +103,25 @@ class Talk:
             chat_name += self.start.strftime("%a-%H")
             if self.start.minute != 0:
                 chat_name += self.start.strftime("%M")
-        if self.room_short:
-            if chat_name:
-                chat_name += "-"
-            chat_name += self.room_short
+        # if self.room_short:
+        #     if chat_name:
+        #         chat_name += "-"
+        #     chat_name += self.room_short
         if chat_name:
             chat_name += ": "
         chat_name += title
 
         self.chat_name: str = chat_name
+
+
+class TalkSpaceRoomCache:
+    time: datetime = datetime(1970, 1, 1, tzinfo=UTC)
+    lock: Lock
+    space: dict[str, Any]
+    children: dict[RoomID, dict[str, Any]]
+    child_states: dict[RoomID, StrippedStateEvent]
+
+    def __init__(self) -> None:
+        self.lock = Lock()
+        self.space = {}
+        self.children = {}

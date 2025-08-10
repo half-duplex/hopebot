@@ -466,7 +466,7 @@ wheels = [
 
 [[package]]
 name = "hopebot"
-version = "2.0.0rc3"
+version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
@@ -474,6 +474,7 @@ dependencies = [
     { name = "numpy" },
     { name = "perlin-numpy" },
     { name = "pyside6" },
+    { name = "python-dateutil" },
 ]
 
 [package.dev-dependencies]
@@ -486,6 +487,7 @@ dev = [
     { name = "flake8-pyproject" },
     { name = "flake8-type-checking" },
     { name = "mypy" },
+    { name = "types-python-dateutil" },
 ]
 
 [package.metadata]
@@ -495,6 +497,7 @@ requires-dist = [
     { name = "numpy", specifier = "~=2.0" },
     { name = "perlin-numpy", git = "https://github.com/pvigier/perlin-numpy" },
     { name = "pyside6", specifier = "~=6.9" },
+    { name = "python-dateutil", specifier = "~=2.9" },
 ]
 
 [package.metadata.requires-dev]
@@ -506,7 +509,8 @@ dev = [
     { name = "flake8-isort", specifier = "~=6.1" },
     { name = "flake8-pyproject", specifier = "~=1.2" },
     { name = "flake8-type-checking", specifier = "~=3.0" },
-    { name = "mypy", specifier = "~=1.16" },
+    { name = "mypy", specifier = "~=1.17.1" },
+    { name = "types-python-dateutil", specifier = "~=2.9" },
 ]
 
 [[package]]
@@ -1078,6 +1082,18 @@ wheels = [
 ]
 
 [[package]]
+name = "python-dateutil"
+version = "2.9.0.post0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
+]
+
+[[package]]
 name = "python-olm"
 version = "3.2.16"
 source = { registry = "https://pypi.org/simple" }
@@ -1172,6 +1188,24 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5e/b0/75b86ee3f7b044e6a87fbe7abefd1948ca4ae5fcde8321f4986a1d9eaa5e/shiboken6-6.9.1-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:efcf75d48a29ae072d0bf54b3cd5a59ae91bb6b3ab7459e17c769355486c2e0b", size = 203233, upload-time = "2025-06-03T13:16:48.264Z" },
     { url = "https://files.pythonhosted.org/packages/30/56/00af281275aab4c79e22e0ea65feede0a5c6da3b84e86b21a4a0071e0744/shiboken6-6.9.1-cp39-abi3-win_amd64.whl", hash = "sha256:209ccf02c135bd70321143dcbc5023ae0c056aa4850a845955dd2f9b2ff280a9", size = 1153587, upload-time = "2025-06-03T13:16:50.454Z" },
     { url = "https://files.pythonhosted.org/packages/de/ce/6ccd382fbe1a96926c5514afa6f2c42da3a9a8482e61f8dfc6068a9ca64f/shiboken6-6.9.1-cp39-abi3-win_arm64.whl", hash = "sha256:2a39997ce275ced7853defc89d3a1f19a11c90991ac6eef3435a69bb0b7ff1de", size = 1831623, upload-time = "2025-06-03T13:16:52.468Z" },
+]
+
+[[package]]
+name = "six"
+version = "1.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "types-python-dateutil"
+version = "2.9.0.20250809"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/53/07dac71db45fb6b3c71c2fd29a87cada2239eac7ecfb318e6ebc7da00a3b/types_python_dateutil-2.9.0.20250809.tar.gz", hash = "sha256:69cbf8d15ef7a75c3801d65d63466e46ac25a0baa678d89d0a137fc31a608cc1", size = 15820, upload-time = "2025-08-09T03:14:14.109Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/5e/67312e679f612218d07fcdbd14017e6d571ce240a5ba1ad734f15a8523cc/types_python_dateutil-2.9.0.20250809-py3-none-any.whl", hash = "sha256:768890cac4f2d7fd9e0feb6f3217fce2abbfdfc0cadd38d11fba325a815e4b9f", size = 17707, upload-time = "2025-08-09T03:14:13.314Z" },
 ]
 
 [[package]]

@@ -21,6 +21,7 @@ class Config(BaseProxyConfig):
             "talk_chat_skip",
             "talk_chat_moderators",
             "talk_chats_locked",
+            "timezone",
             "pretalx_json_url",
             "ratelimit_multiplier",
         ]

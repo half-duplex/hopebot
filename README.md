@@ -35,15 +35,17 @@ Users can:
 - Say `!mod [message]` to request a moderator's presence
 
 For bot owners, the following commands are available:
-- `!stats` - Show count of loaded and redeemed tokens
 - `!load_tokens /path/to/attendee.txt attendee [clear|truncate]` - Load a set of tokens,
   optionally removing same-type (clear) or ALL (truncate) tokens first.
 - `!mark_unused token|hash` - Allow the token to be used again
 - `!op [!room:id.x] [@user:id.x]` - Give someone admin perms in a room
-- `!token_info token|hash` - Show who redeemed a token and when
-- `!sync_talks` - Synchronize scheduled talks to rooms
+- `!order space room|"here" [order]` - Change space child order. Omit order
+  to clear. [Docs](https://spec.matrix.org/latest/client-server-api/#ordering-of-children-within-a-space)
 - `!speaker @foo:example.com [talk shortcode|link]` - Mark a user as a speaker
   and give moderator permissions in that talk's room
+- `!stats` - Show count of loaded and redeemed tokens
+- `!sync_talks` - Synchronize scheduled talks to rooms
+- `!token_info token|hash` - Show who redeemed a token and when
 
 ## Matrix Setup
 To prepare a conference:
