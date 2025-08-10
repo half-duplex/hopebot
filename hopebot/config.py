@@ -15,15 +15,13 @@ class Config(BaseProxyConfig):
             "token_regex",
             "schedule_talk_regex",
             "enable_token_clearing",
-            "spaces",
+            "rooms",
             "help",
             "owners",
-            "talk_chat_space",
             "talk_chat_skip",
             "talk_chat_moderators",
             "talk_chats_locked",
             "pretalx_json_url",
-            "mod_room",
             "ratelimit_multiplier",
         ]
         for option in options:

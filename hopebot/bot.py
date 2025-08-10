@@ -115,7 +115,7 @@ class HopeBot(Plugin):
                 evt.content.body,
             )
         )
-        await evt.client.send_text(self.config["mod_room"], html=message)
+        await evt.client.send_text(self.config["rooms"]["moderation"], html=message)
 
     @command.new()
     async def stats(self, evt: MaubotMessageEvent):
@@ -219,7 +219,7 @@ class HopeBot(Plugin):
                 )
 
             try:  # to invite them to the presenters space
-                await evt.client.invite_user(self.config["spaces"]["presenter"], user)
+                await evt.client.invite_user(self.config["rooms"]["presenter"], user)
             except (KeyError, MForbidden):
                 pass
             else:
@@ -367,11 +367,11 @@ class HopeBot(Plugin):
                     allow=[
                         JoinRestriction(
                             type=JoinRestrictionType.ROOM_MEMBERSHIP,
-                            room_id=self.config["spaces"]["attendee"],
+                            room_id=self.config["rooms"]["attendee"],
                         ),
                         JoinRestriction(
                             type=JoinRestrictionType.ROOM_MEMBERSHIP,
-                            room_id=self.config["talk_chat_space"],
+                            room_id=self.config["rooms"]["talks"],
                         ),
                     ],
                 )
@@ -451,10 +451,10 @@ class HopeBot(Plugin):
                         initial_state=[
                             StrippedStateEvent(
                                 type=EventType.SPACE_PARENT,
-                                state_key=self.config["talk_chat_space"],
+                                state_key=self.config["rooms"]["talks"],
                                 content=SpaceParentStateEventContent(
                                     canonical=True,
-                                    via=[self.config["talk_chat_space"].split(":")[1]],
+                                    via=[self.config["rooms"]["talks"].split(":")[1]],
                                 ),
                             ),
                             StrippedStateEvent(
@@ -498,7 +498,7 @@ class HopeBot(Plugin):
                         LOGGER.error("Error creating room for %r", chat_name)
                         continue
                     await evt.client.send_state_event(
-                        self.config["talk_chat_space"],
+                        self.config["rooms"]["talks"],
                         EventType.SPACE_CHILD,
                         content=SpaceChildStateEventContent(
                             via=[room_id.split(":")[1]]
@@ -715,7 +715,7 @@ class HopeBot(Plugin):
         if evt.sender not in self.config["owners"]:
             LOGGER.warning("Attempt by non-owner %r to load tokens", evt.sender)
             return
-        if token_type not in self.config["spaces"]:
+        if token_type not in self.config["rooms"]:
             await evt.reply("Unknown type {}".format(repr(token_type)))
             return
         await evt.reply("Loading tokens from {}...".format(filename))
@@ -972,9 +972,9 @@ class HopeBot(Plugin):
                 "Inviting %r to %r (%r)",
                 evt.sender,
                 d["type"],
-                self.config["spaces"].get(d["type"]),
+                self.config["rooms"].get(d["type"]),
             )
-            if d["type"] not in self.config["spaces"]:
+            if d["type"] not in self.config["rooms"]:
                 if pm:
                     await evt.reply(
                         (
@@ -991,7 +991,7 @@ class HopeBot(Plugin):
                 continue
             try:
                 await evt.client.invite_user(
-                    self.config["spaces"][d["type"]], evt.sender
+                    self.config["rooms"][d["type"]], evt.sender
                 )
             except MForbidden:
                 if pm:

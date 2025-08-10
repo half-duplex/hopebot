@@ -1,24 +1,29 @@
 # Search all PMs for this token to process:
-token_regex: "HOPE2024-[0-9A-F]{8}-(:?[0-9A-F]{4}-){3}[0-9A-F]{10}"
+token_regex: "HOPE(?:_?16|2025)[VP]?T?-[0-9A-F]{8}-(?:[0-9A-F]{4}-){3}[0-9A-F]{9,10}"
 # The URL format for talk links, capturing the shortcode
 schedule_talk_regex: "https://scheduler.hope.net/foo/talk/([a-z0-9]{5,})/"
 # Strongly recommended to set to false in prod
 enable_token_clearing: false
-# The "Room" IDs for the spaces for each token type (must match schema ENUM)
-spaces:
+rooms:
+  # Where tokens will join people
   attendee: "!foo:host.tld"
   volunteer: "!foo:host.tld"
   presenter: "!foo:host.tld"
+  press: "!foo:host.tld"
+  # Space for the talk rooms
+  talks: '!foo:host.tld'
+  # Where should announcements go?
+  announcements: '!foo:host.tld'
+  # Where should !mod flags go?
+  moderation: '!foo:host.tld'
 # Said for help command, new PM rooms, or PMs not containing a token
 help: >-
   Hello! I'm the HOPE core bot. To gain access to the HOPE
   chat rooms, just send me the token you were sent by email.
-  It looks like this: `HOPE2024-EBC92A72-9151-885B-5526-FBE8D5A37F`
+  It looks like this: `HOPE16-EBC92A72-9151-885B-5526-FBE8D5A37F`
 # Allowed to use bot admin commands and given admin perms in talk chats
 owners:
   - "@bar:host.tld"
-# The Space to create presentation channels in
-talk_chat_space: "!foo:host.tld"
 # Shortcodes for talks that don't deserve chat rooms
 talk_chat_skip:
   - 'NSLJQ9'
@@ -27,7 +32,5 @@ talk_chat_moderators:
 # Set talk chat message/react/redact permissions to 50 (moderator+)
 talk_chats_locked: false
 pretalx_json_url: "https://scheduler.hope.net/foo/schedule.json"
-# Where should !mod flags go?
-mod_room: "!foo:host.tld"
 # Roughly: seconds delay per request for intensive processes
 ratelimit_multiplier: 2
