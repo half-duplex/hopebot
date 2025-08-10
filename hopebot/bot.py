@@ -4,7 +4,6 @@ from asyncio import Lock, sleep
 from dataclasses import fields
 from datetime import datetime, timedelta
 from hashlib import sha256
-import logging
 import re
 from typing import TYPE_CHECKING
 
@@ -49,9 +48,6 @@ if TYPE_CHECKING:
     from mautrix.types import RoomID, UserID
     from mautrix.util.async_db import UpgradeTable
     from mautrix.util.config import BaseProxyConfig
-
-
-LOGGER = logging.getLogger(__name__)
 
 
 class HopeBot(Plugin):
@@ -166,7 +162,7 @@ class HopeBot(Plugin):
         if not self.config or not self.database:
             raise Exception("Config or database not initialized")
         if evt.sender not in self.config["owners"]:
-            LOGGER.warning(
+            self.log.warning(
                 "Attempt by non-owner %r to set speaker: %r %r", evt.sender, user, talk
             )
             return
@@ -203,7 +199,7 @@ class HopeBot(Plugin):
                 )
             except UniqueViolationError:
                 pass
-            LOGGER.info("%r added %r as a speaker for %r", evt.sender, user, talk_id)
+            self.log.info("%r added %r as a speaker for %r", evt.sender, user, talk_id)
             await evt.react("✔️")
 
             power_level_evt = await evt.client.get_state_event(
@@ -280,7 +276,7 @@ class HopeBot(Plugin):
         if not self.config or not self.database:
             raise Exception("config or database not initialized")
         if evt.sender not in self.config["owners"]:
-            LOGGER.warning(
+            self.log.warning(
                 "Attempt by non-owner %r to sync talks %r",
                 evt.sender,
                 target_talk if target_talk else "(all)",
@@ -335,7 +331,7 @@ class HopeBot(Plugin):
                 talk_set = sorted(talk_set_unsorted, key=lambda x: x.start)
                 chat_name = talk_set[0].chat_name
 
-                LOGGER.info(
+                self.log.info(
                     "Syncing talk set %d of %d: %r (*%d)",
                     talk_set_idx,
                     len(chat_talks),
@@ -430,7 +426,7 @@ class HopeBot(Plugin):
 
                     # Check times
                     if start != talk.start or end != talk.end or title != talk.title:
-                        LOGGER.debug("Updating start/end/title for $r", talk.id)
+                        self.log.debug("Updating start/end/title for $r", talk.id)
                         await conn.execute(
                             """UPDATE talks
                             SET (start_ts, end_ts, talk_title) = ($1, $2, $3)
@@ -495,7 +491,7 @@ class HopeBot(Plugin):
                         ],
                     )
                     if not room_id:
-                        LOGGER.error("Error creating room for %r", chat_name)
+                        self.log.error("Error creating room for %r", chat_name)
                         continue
                     await evt.client.send_state_event(
                         self.config["rooms"]["talks"],
@@ -506,7 +502,7 @@ class HopeBot(Plugin):
                         state_key=room_id,
                     )
 
-                    LOGGER.info("Created room %r for %r", room_id, chat_name)
+                    self.log.info("Created room %r for %r", room_id, chat_name)
                     await conn.executemany(
                         """INSERT INTO talks
                             (talk_id, talk_shortcode, room_id, start_ts, end_ts, talk_title)
@@ -531,7 +527,7 @@ class HopeBot(Plugin):
                 )
                 if current_name_evt.name != chat_name:
                     delay += 1
-                    LOGGER.debug(
+                    self.log.debug(
                         "Updating room name for %r from %r to %r",
                         room_id,
                         current_name_evt.name,
@@ -552,7 +548,9 @@ class HopeBot(Plugin):
                 )
                 if current_topic_evt.topic != topic_plain:
                     delay += 1
-                    LOGGER.debug("Updating room topic for %r (%r)", room_id, chat_name)
+                    self.log.debug(
+                        "Updating room topic for %r (%r)", room_id, chat_name
+                    )
                     await evt.client.send_state_event(
                         room_id=room_id,
                         event_type=EventType.ROOM_TOPIC,
@@ -582,7 +580,7 @@ class HopeBot(Plugin):
                     current_avatar = None
                 if not current_avatar:
                     delay += 2
-                    LOGGER.debug(
+                    self.log.debug(
                         "Setting avatar for for %r (%r)",
                         room_id,
                         chat_name,
@@ -603,7 +601,7 @@ class HopeBot(Plugin):
                 )
                 if power_level_evt != power_level_content:
                     delay += 1
-                    LOGGER.debug(
+                    self.log.debug(
                         "Updating permissions for %r (%r), was: %r",
                         room_id,
                         chat_name,
@@ -637,7 +635,7 @@ class HopeBot(Plugin):
                 bad_aliases = set()  # set(current_aliases) - set(aliases)
                 for alias in bad_aliases:
                     delay += 1
-                    LOGGER.debug(
+                    self.log.debug(
                         "Removing alias for %r (%r): %r", room_id, chat_name, alias
                     )
                     room_shortcode = alias.split("#")[1].split(":")[0]
@@ -645,7 +643,7 @@ class HopeBot(Plugin):
                 missing_aliases = set(aliases) - set(current_aliases)
                 for alias in missing_aliases:
                     delay += 1
-                    LOGGER.debug(
+                    self.log.debug(
                         "Adding alias for %r (%r): %r",
                         room_id,
                         chat_name,
@@ -676,7 +674,7 @@ class HopeBot(Plugin):
                 )
                 if current_join_rules_evt != join_rules_content:
                     delay += 1
-                    LOGGER.debug(
+                    self.log.debug(
                         "Updating join rules for %r (%r), was: %r",
                         room_id,
                         chat_name,
@@ -696,7 +694,7 @@ class HopeBot(Plugin):
         await evt.reply("Done!")
 
     async def create_avatar(self, client, seed):
-        LOGGER.info("Generating avatar for seed %d", seed)
+        self.log.info("Generating avatar for seed %d", seed)
         avatar_data = await draw_flow_field(500, 500, num=2, seed=seed)
         return await client.upload_media(
             avatar_data,
@@ -713,13 +711,13 @@ class HopeBot(Plugin):
         if not self.config or not self.database:
             raise Exception("Config or database not initialized")
         if evt.sender not in self.config["owners"]:
-            LOGGER.warning("Attempt by non-owner %r to load tokens", evt.sender)
+            self.log.warning("Attempt by non-owner %r to load tokens", evt.sender)
             return
         if token_type not in self.config["rooms"]:
             await evt.reply("Unknown type {}".format(repr(token_type)))
             return
         await evt.reply("Loading tokens from {}...".format(filename))
-        LOGGER.warning(
+        self.log.warning(
             "Token load for %ss from %r started by %s, clear=%s",
             token_type,
             filename,
@@ -732,13 +730,13 @@ class HopeBot(Plugin):
                 if not self.config["enable_token_clearing"]:
                     await evt.reply("Token clearing is disabled, aborting.")
                     return
-                LOGGER.warning("Truncating table")
+                self.log.warning("Truncating table")
                 await conn.execute("TRUNCATE TABLE tokens")
             elif clear == "clear":
                 if not self.config["enable_token_clearing"]:
                     await evt.reply("Token clearing is disabled, aborting.")
                     return
-                LOGGER.warning("Removing all %s tokens", token_type)
+                self.log.warning("Removing all %s tokens", token_type)
                 await conn.execute("DELETE FROM tokens WHERE type = $1", token_type)
             loaded = 0
             with open(filename, "r", encoding="utf-8-sig") as f:
@@ -758,7 +756,7 @@ class HopeBot(Plugin):
                         raise e
                     loaded += 1
             await conn.execute("COMMIT")
-        LOGGER.info("Token load finished, loaded %d", loaded)
+        self.log.info("Token load finished, loaded %d", loaded)
         await evt.reply("Done, loaded {} {} tokens".format(loaded, token_type))
 
     @command.new(name="mark_unused")
@@ -767,7 +765,7 @@ class HopeBot(Plugin):
         if not self.config or not self.database:
             raise Exception("Config or database not initialized")
         if evt.sender not in self.config["owners"]:
-            LOGGER.warning(
+            self.log.warning(
                 "Attempt by non-owner %r to mark token unused: %r", evt.sender, token
             )
             return
@@ -796,7 +794,7 @@ class HopeBot(Plugin):
                 await evt.reply("That token hasn't been used")
                 return
 
-            LOGGER.warning(
+            self.log.warning(
                 "%r marked token unused (previously used by %r at %s): %r",
                 evt.sender,
                 d["used_by"],
@@ -820,7 +818,7 @@ class HopeBot(Plugin):
         if not self.config or not self.database:
             raise Exception("Config or database not initialized")
         if evt.sender not in self.config["owners"]:
-            LOGGER.warning(
+            self.log.warning(
                 "Attempt by non-owner %r to get info for token %r", evt.sender, token
             )
             return
@@ -856,7 +854,7 @@ class HopeBot(Plugin):
             or evt.unsigned.invite_room_state is not None
         ):
             return
-        LOGGER.info("New room with %r", evt.sender)
+        self.log.info("New room with %r", evt.sender)
         async with self.direct_update_lock:
             direct_rooms = await evt.client.get_account_data(EventType.DIRECT)
             if evt.sender not in direct_rooms:
@@ -866,7 +864,7 @@ class HopeBot(Plugin):
         await self.sync_direct_rooms(evt.client)
 
     async def sync_direct_rooms(self, client):
-        LOGGER.info("Resyncing direct rooms")
+        self.log.info("Resyncing direct rooms")
         self.direct_rooms = await client.get_account_data(EventType.DIRECT)
 
     @event.on(EventType.ROOM_MESSAGE)
@@ -907,7 +905,7 @@ class HopeBot(Plugin):
             await self.sync_direct_rooms(evt.client)
         pm = evt.room_id in self.direct_rooms.get(evt.sender, [])
 
-        LOGGER.debug(
+        self.log.debug(
             "%s in %r: %r: %r",
             "PM" if pm else "Room message",
             evt.room_id,
@@ -916,7 +914,9 @@ class HopeBot(Plugin):
         )
 
         if token_match and not pm:
-            LOGGER.warning("Token found in non-PM room: %r %r", evt.sender, evt.room_id)
+            self.log.warning(
+                "Token found in non-PM room: %r %r", evt.sender, evt.room_id
+            )
 
         if evt.content.body[0] == "!":
             return
@@ -939,7 +939,7 @@ class HopeBot(Plugin):
                     await evt.reply("Sorry, that's not a valid token.")
                 return
             if not all(row["used_at"] for row in token_rows):
-                LOGGER.info("Marking token used: %r %r", evt.sender, token)
+                self.log.info("Marking token used: %r %r", evt.sender, token)
                 await conn.execute(
                     (
                         "UPDATE tokens SET used_at = NOW(), used_by = $1 "
@@ -952,7 +952,7 @@ class HopeBot(Plugin):
 
         used_by = {row["used_by"] for row in token_rows}.pop()
         if used_by and used_by != evt.sender:
-            LOGGER.info(
+            self.log.info(
                 "Attempted token reuse: %r used %r's %r",
                 evt.sender,
                 used_by,
@@ -968,7 +968,7 @@ class HopeBot(Plugin):
         invited_spaces = []
         error_spaces = []
         for d in token_rows:
-            LOGGER.info(
+            self.log.info(
                 "Inviting %r to %r (%r)",
                 evt.sender,
                 d["type"],
@@ -982,7 +982,7 @@ class HopeBot(Plugin):
                             "Please try again later, or report this problem to staff."
                         ).format(d["type"])
                     )
-                LOGGER.error(
+                self.log.error(
                     "Token from %r marked as %r but I don't know that space! %r",
                     evt.sender,
                     d["type"],
