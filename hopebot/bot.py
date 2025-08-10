@@ -23,6 +23,7 @@ from mautrix.types import (
     RoomAlias,
     RoomAvatarStateEventContent,
     RoomCreatePreset,
+    RoomID,
     SpaceChildStateEventContent,
     SpaceParentStateEventContent,
     StateEvent,
@@ -226,6 +227,52 @@ class HopeBot(Plugin):
 
     async def sync_talk(self, client: MaubotMatrixClient, shortcode: TalkShortcode):
         pass
+
+    @command.new(name="op")
+    @command.argument("room", required=False)
+    @command.argument("user", required=False)
+    async def add_admin(
+        self, evt: MaubotMessageEvent, room: RoomID | None, user: UserID | None
+    ):
+        if not self.config:
+            raise Exception("config not initialized")
+        if evt.sender not in self.config["owners"]:
+            self.log.warning(
+                "Attempt by non-owner %r to get admin in %r",
+                evt.sender,
+                evt.room_id,
+            )
+            await evt.react("💩")
+            return
+        target_room = room if room else evt.room_id
+        target_user = user if user else evt.sender
+
+        try:
+            power_level_evt = await evt.client.get_state_event(
+                room_id=target_room,
+                event_type=EventType.ROOM_POWER_LEVELS,
+            )
+        except MForbidden:
+            await evt.reply(
+                "That room ID is invalid, I'm not in it, or I don't have admin there."
+            )
+            return
+        if power_level_evt.users.get(target_user, 0) == 100:
+            await evt.reply("That user is already admin")
+            return
+        self.log.warning(
+            "Op: %r is granting admin permissions to %r in %r",
+            evt.sender,
+            target_user,
+            target_room,
+        )
+        power_level_evt.users[target_user] = 100
+        await evt.client.send_state_event(
+            room_id=target_room,
+            event_type=EventType.ROOM_POWER_LEVELS,
+            content=power_level_evt,
+        )
+        await evt.react("✔️")
 
     @command.new(name="sync_talks")
     @command.argument("target_talk", required=False)

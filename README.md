@@ -39,6 +39,7 @@ For bot owners, the following commands are available:
 - `!load_tokens /path/to/attendee.txt attendee [clear|truncate]` - Load a set of tokens,
   optionally removing same-type (clear) or ALL (truncate) tokens first.
 - `!mark_unused token|hash` - Allow the token to be used again
+- `!op [!room:id.x] [@user:id.x]` - Give someone admin perms in a room
 - `!token_info token|hash` - Show who redeemed a token and when
 - `!sync_talks` - Synchronize scheduled talks to rooms
 - `!speaker @foo:example.com [talk shortcode|link]` - Mark a user as a speaker
