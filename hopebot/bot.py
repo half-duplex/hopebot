@@ -151,6 +151,9 @@ class HopeBot(Plugin):
         for room_id, alltalks_child_state in talks_space.child_states.items():
             alltalks_child_content = alltalks_child_state.content
 
+            if room_id not in talks:
+                self.log.error("Unknown room %r: Please run !sync_talks", room_id)
+                continue
             talk = talks[room_id]
             started = talk["start_ts"] < now
             recent_start = started and talk["start_ts"] > now - timedelta(hours=1)
@@ -596,8 +599,6 @@ class HopeBot(Plugin):
             if target_shortcode and talk.shortcode != target_shortcode:
                 continue
 
-            await self.sync_talk(evt.client, talk.shortcode)
-
             chat_talks[talk.chat_name] = chat_talks.get(talk.chat_name, []) + [talk]
 
         async with self.database.acquire() as conn:
@@ -709,7 +710,7 @@ class HopeBot(Plugin):
                         or location != talk.room
                     ):
                         self.log.debug(
-                            "Updating start/end/title/location for $r", talk.id
+                            "Updating start/end/title/location for %r", talk.id
                         )
                         await conn.execute(
                             """UPDATE talks
@@ -1234,7 +1235,11 @@ class HopeBot(Plugin):
 
             if not token_rows:
                 if pm:
-                    await evt.reply("Sorry, that's not a valid token.")
+                    await evt.reply(
+                        "Sorry, that's not a valid token. If you're sure it's "
+                        "correct, I might not have been told about it yet - "
+                        "Wait a while and try again."
+                    )
                 return
             if not all(row["used_at"] for row in token_rows):
                 self.log.info("Marking token used: %r %r", evt.sender, token)
