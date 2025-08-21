@@ -66,7 +66,7 @@ To prepare a conference:
   - Invite users = Admin
 - Put the space and room IDs into appropriate places in the bot config
 - Update the rest of the bot config (token format, admins, etc)
-- Generate tokens with `contrib/make_tokens.sh`, load with `!load_tokens`
+- Generate tokens with `uv run hopebot-tokens`, load with `!load_tokens`
 - If one token type (e.g. presenter) should also grant access to another
   space (e.g. attendee), load the list a second time with the other type.
 

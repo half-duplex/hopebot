@@ -38,6 +38,9 @@ dev = [
     "types-python-dateutil~=2.9",
 ]
 
+[project.scripts]
+hopebot-tokens = "hopebot.token_utils:cli"
+
 [build-system]
 requires = ["setuptools~=80.9"]
 build-backend = "setuptools.build_meta"
