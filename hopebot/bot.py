@@ -45,7 +45,6 @@ from mautrix.types.event.state import (
 
 from .config import Config
 from .db import upgrade_table
-from .image_gen import draw_flow_field
 from .types import Talk, TalkShortcode, TalkSpaceRoomCache
 from .util import room_mention
 
@@ -994,6 +993,8 @@ class HopeBot(Plugin):
 
     async def create_avatar(self, client, seed):
         self.log.info("Generating avatar for seed %d", seed)
+        # importing up top adds unnecessary dependencies to token generation
+        from .image_gen import draw_flow_field
         avatar_data = await draw_flow_field(500, 500, num=2, seed=seed)
         return await client.upload_media(
             avatar_data,
