@@ -136,7 +136,7 @@ class HopeBot(Plugin):
             for k, v in talks.items()
             if v["start_ts"] < soon and v["end_ts"] > earlier
         }
-        self.log.info(
+        self.log.debug(
             "There's %s nowish (%r) talks: %r",
             len(talks_nowish),
             now.isoformat(),
