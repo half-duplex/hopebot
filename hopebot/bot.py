@@ -316,14 +316,11 @@ class HopeBot(Plugin):
     async def help(self, evt: MaubotMessageEvent):
         if not self.config:
             raise Exception("Config not initialized")
-        if evt.sender in self.config["owners"]:
-            await evt.reply(
-                self.config["help"]
-                + "\n\nFor a list of admin commands, see "
-                + "https://github.com/half-duplex/hopebot/blob/main/README.md#usage"
-            )
-        else:
-            await evt.reply(self.config["help"])
+        reply = self.config["help"] + (
+            "\nFor a list of commands, see"
+            " https://github.com/half-duplex/hopebot/blob/main/README.md#usage"
+        ).replace("\n", "\n\n")  # markdown...
+        await evt.reply(reply)
 
     @command.new()
     async def version(self, evt: MaubotMessageEvent):
@@ -1248,7 +1245,7 @@ class HopeBot(Plugin):
             return
         if not token_match:
             if pm:
-                await evt.reply(self.config["help"])
+                await evt.reply(self.config["help"].replace("\n", "\n\n"))
             return
 
         token = token_match.group(0)
