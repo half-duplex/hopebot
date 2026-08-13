@@ -11,7 +11,6 @@ from secrets import choice
 from string import punctuation, whitespace
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
     from hashlib import _Hash as Hash
 

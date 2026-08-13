@@ -9,7 +9,6 @@ from string import ascii_uppercase, digits
 from typing import NewType, TYPE_CHECKING
 from urllib.parse import urlparse
 
-
 if TYPE_CHECKING:
     from typing import Any, Dict, List
 

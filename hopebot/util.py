@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from mautrix.types import MatrixURI
 
-
 if TYPE_CHECKING:
     from mautrix.types import EventID
 

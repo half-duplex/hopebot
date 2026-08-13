@@ -51,7 +51,6 @@ from .db import upgrade_table
 from .types import Talk, TalkShortcode, TalkSpaceRoomCache
 from .util import room_mention
 
-
 if TYPE_CHECKING:
     from typing import Type
 
@@ -319,7 +318,9 @@ class HopeBot(Plugin):
         reply = self.config["help"] + (
             "\nFor a list of commands, see"
             " https://github.com/half-duplex/hopebot/blob/main/README.md#usage"
-        ).replace("\n", "\n\n")  # markdown...
+        ).replace(
+            "\n", "\n\n"
+        )  # markdown...
         await evt.reply(reply)
 
     @command.new()
@@ -538,7 +539,10 @@ class HopeBot(Plugin):
             target_power = min(98, self.config["privileges"].get(target_user, 0))
 
         # Only known accounts can use !op
-        if evt.sender not in self.config["owners"] and evt.sender not in self.config["privileges"]:
+        if (
+            evt.sender not in self.config["owners"]
+            and evt.sender not in self.config["privileges"]
+        ):
             self.log.warning(
                 "Attempt by unprivileged user %r in %r to !op %r in %r",
                 evt.sender,
@@ -573,7 +577,11 @@ class HopeBot(Plugin):
         if not isinstance(power_level_evt, PowerLevelStateEventContent):
             raise ValueError("Wrong StateEventContent type")
         if power_level_evt.users.get(target_user, 0) >= target_power:
-            await evt.reply("{} already has power level {} or higher in {}".format(target_user, target_power, target_room))
+            await evt.reply(
+                "{} already has power level {} or higher in {}".format(
+                    target_user, target_power, target_room
+                )
+            )
             return
         self.log.warning(
             "Op: %r in %r used !op to grant power level %s to %r in %r",
@@ -634,7 +642,7 @@ class HopeBot(Plugin):
             chat_talks[talk.chat_name] = chat_talks.get(talk.chat_name, []) + [talk]
 
         # the message edit causes a mysterious db error if it's in this `with` block...
-        #async with self.database.acquire() as conn:
+        # async with self.database.acquire() as conn:
         for talk_set_idx, talk_set_unsorted in enumerate(chat_talks.values()):
             # Sort for determinism (earliest is the one that gets the chat room, etc)
             talk_set = sorted(talk_set_unsorted, key=lambda x: x.start)
@@ -665,9 +673,7 @@ class HopeBot(Plugin):
                 topic += "<br><a href='{2}'>{0} in {1}</a>".format(
                     date, talk.room, talk.url
                 )
-                topic_plain += "\n- {} in {}, {}  ".format(
-                    date, talk.room, talk.url
-                )
+                topic_plain += "\n- {} in {}, {}  ".format(date, talk.room, talk.url)
 
             join_rules_content = JoinRulesStateEventContent(
                 join_rule=JoinRule.RESTRICTED,
@@ -723,9 +729,7 @@ class HopeBot(Plugin):
 
             row = None
             room_id: RoomID | None = None
-            for talk in reversed(
-                talk_set
-            ):  # [0] last, to use those IDs for the set
+            for talk in reversed(talk_set):  # [0] last, to use those IDs for the set
                 row = await self.database.fetchrow(
                     """SELECT room_id, start_ts, end_ts, talk_title, location
                     FROM talks WHERE talk_id = $1""",
@@ -742,9 +746,7 @@ class HopeBot(Plugin):
                     or title != talk.title
                     or location != talk.room
                 ):
-                    self.log.debug(
-                        "Updating start/end/title/location for %r", talk.id
-                    )
+                    self.log.debug("Updating start/end/title/location for %r", talk.id)
                     await self.database.execute(
                         """UPDATE talks
                         SET (start_ts, end_ts, talk_title, location) = ($1, $2, $3, $4)
@@ -815,9 +817,7 @@ class HopeBot(Plugin):
                 await self.client.send_state_event(
                     self.config["rooms"]["talks"],
                     EventType.SPACE_CHILD,
-                    content=SpaceChildStateEventContent(
-                        via=[room_id.split(":")[1]]
-                    ),
+                    content=SpaceChildStateEventContent(via=[room_id.split(":")[1]]),
                     state_key=room_id,
                 )
 
@@ -878,9 +878,7 @@ class HopeBot(Plugin):
                 raise ValueError("Wrong StateEventContent type")
             if current_topic_evt.topic != topic_plain:
                 delay += 1
-                self.log.debug(
-                    "Updating room topic for %r (%r)", room_id, chat_name
-                )
+                self.log.debug("Updating room topic for %r (%r)", room_id, chat_name)
                 await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_TOPIC,
@@ -951,8 +949,7 @@ class HopeBot(Plugin):
 
             # Match aliases
             aliases = [
-                RoomAlias("#{}:hope.net".format(talk.shortcode))
-                for talk in talk_set
+                RoomAlias("#{}:hope.net".format(talk.shortcode)) for talk in talk_set
             ]
             try:
                 canonical_alias_evt = await self.client.get_state_event(
@@ -963,16 +960,12 @@ class HopeBot(Plugin):
                     raise ValueError("Wrong StateEventContent type")
                 current_aliases = canonical_alias_evt.alt_aliases
                 if canonical_alias_evt.canonical_alias:
-                    current_aliases = [
-                        canonical_alias_evt.canonical_alias
-                    ] + aliases
+                    current_aliases = [canonical_alias_evt.canonical_alias] + aliases
             except MNotFound:
                 current_aliases = []
             # Except when I break stuff, we probably don't want to clear
             # manually-created aliases
-            bad_aliases: set[RoomAlias] = (
-                set()
-            )  # set(current_aliases) - set(aliases)
+            bad_aliases: set[RoomAlias] = set()  # set(current_aliases) - set(aliases)
             for alias in bad_aliases:
                 delay += 1
                 self.log.debug(
@@ -1037,6 +1030,7 @@ class HopeBot(Plugin):
         self.log.info("Generating avatar for seed %d", seed)
         # importing up top adds unnecessary dependencies to token generation
         from .image_gen import draw_flow_field
+
         avatar_data = await draw_flow_field(500, 500, num=2, seed=seed)
         return await client.upload_media(
             avatar_data,

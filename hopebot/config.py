@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from mautrix.util.config import BaseProxyConfig
 
-
 if TYPE_CHECKING:
     from mautrix.util.config import ConfigUpdateHelper
 
