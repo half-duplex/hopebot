@@ -9,6 +9,7 @@ from asyncio import (
 from dataclasses import fields
 from datetime import datetime, timedelta, UTC
 from hashlib import sha256
+import logging
 import re
 from typing import TYPE_CHECKING
 
@@ -1024,7 +1025,7 @@ class HopeBot(Plugin):
             await sleep(delay * self.config.get("ratelimit_multiplier", 2))
 
         await self.client.set_typing(evt.room_id, 0)
-        await evt.reply("Done!")
+        await evt.react("✔️")
 
     async def create_avatar(self, seed):
         self.log.info("Generating avatar for seed %d", seed)
@@ -1146,7 +1147,7 @@ class HopeBot(Plugin):
                 token_hash,
             )
             await conn.execute("COMMIT")
-        await evt.reply("Done")
+        await evt.react("✔️")
 
     @command.new(name="token_info")
     @command.argument("token")
@@ -1346,7 +1347,16 @@ class HopeBot(Plugin):
 
         reply = ""
         for space in invited_spaces:
-            reply += "I've invited you to the {} space!  \n".format(space)
+            try:
+                aliases = await self.client.api.request(
+                    Method.GET,
+                    Path.v3.rooms[self.config["rooms"][space]].aliases
+                )
+                self.log.error("foo %r", aliases)
+            except Exception:
+                self.log.exception("foooooo")
+            space_alias = ""
+            reply += "I've invited you to the {} space:{}  \n".format(space, space_alias)
         if invited_spaces:
             plural = len(invited_spaces) > 1
             reply += (
