@@ -1,37 +1,47 @@
 # Search all PMs for this token to process:
-token_regex: "HOPE(?:_?16|2025)[VP]?T?-[0-9A-F]{8}-(?:[0-9A-F]{4}-){3}[0-9A-F]{9,10}"
+token_regex: HOPE26::[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}
+pretalx_json_url: https://scheduler.hope.net/foo/schedule.json
 # The URL format for talk links, capturing the shortcode
-schedule_talk_regex: "https://scheduler.hope.net/foo/talk/([a-z0-9]{5,})/"
-# Strongly recommended to set to false in prod
+schedule_talk_regex: https://schedule.hope.net/hope26/talk/([a-z0-9]{5,})/
+# Enable `clear` and `truncate` arguments to !load_tokens
+# Disable this once testing is done and real tokens are loaded
 enable_token_clearing: false
-rooms:
-  # Where tokens will join people
-  attendee: "!foo:host.tld"
-  volunteer: "!foo:host.tld"
-  presenter: "!foo:host.tld"
-  press: "!foo:host.tld"
-  # Space for the talk rooms
-  talks: '!foo:host.tld'
-  # Where should announcements go?
-  announcements: '!foo:host.tld'
-  # Where should !mod flags go?
-  moderation: '!foo:host.tld'
-# Said for help command, new PM rooms, or PMs not containing a token
-help: >-
-  Hello! I'm the HOPE core bot. To gain access to the HOPE
-  chat rooms, just send me the token you were sent by email.
-  It looks like this: `HOPE16-EBC92A72-9151-885B-5526-FBE8D5A37F`
-# Allowed to use bot admin commands and given admin perms in talk chats
-owners:
-  - "@bar:host.tld"
-# Shortcodes for talks that don't deserve chat rooms
-talk_chat_skip:
-  - 'NSLJQ9'
-talk_chat_moderators:
-  - "@foo:host.tld"
 # Set talk chat message/react/redact permissions to 50 (moderator+)
 talk_chats_locked: false
-pretalx_json_url: "https://scheduler.hope.net/foo/schedule.json"
+# Message sent for help command, new PM rooms, and PMs not containing a token
+help: >-
+  Hello!
+
+  To access the HOPE spaces and chat rooms, send me
+  the token you received by email. It looks like this:
+  `HOPE26::a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6`
+# Room aliases
+# Must include room/space names used for tokens, e.g. "attendee"
+# Must include "announcements" for announcements to work
+# Must include "moderation" for !mod to work
+# Must include "log" for logging to work
+# Can be used in commands like !op and !order
+rooms:
+  announcements: '!foo:host.tld'
+  moderation: '!foo:host.tld'
+  log: '!foo:host.tld'
+  attendee: '!foo:host.tld'
+  volunteer: '!foo:host.tld'
+  presenter: '!foo:host.tld'
+  press: '!foo:host.tld'
+  talks: '!foo:host.tld'
+# Shortcodes for talks that shouldn't have chat rooms
+talk_chat_skip:
+  - 'NSLJQ9'
+# Bot admins. Power 100 in all spaces/rooms
+owners:
+  - '@admin:host.tld'
+# Users given power in ALL conference spaces/rooms
+# Map of '@mod:host.tld': powerlevel
+# 100 is an admin that cannot be demoted
+# 50 is a moderator
+privileges:
+  '@mod:host.tld': 50
 # Roughly: seconds delay per request for intensive processes
 ratelimit_multiplier: 2
 timezone: America/New_York

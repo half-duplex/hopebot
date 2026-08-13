@@ -13,17 +13,17 @@ class Config(BaseProxyConfig):
     def do_update(self, helper: ConfigUpdateHelper):
         options = [
             "token_regex",
+            "pretalx_json_url",
             "schedule_talk_regex",
             "enable_token_clearing",
-            "rooms",
-            "help",
-            "owners",
-            "talk_chat_skip",
-            "talk_chat_moderators",
             "talk_chats_locked",
-            "timezone",
-            "pretalx_json_url",
+            "help",
+            "rooms",
+            "talk_chat_skip",
+            "owners",
+            "privileges",
             "ratelimit_multiplier",
+            "timezone",
         ]
         for option in options:
             helper.copy(option)
