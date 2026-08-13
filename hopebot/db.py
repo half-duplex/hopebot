@@ -90,3 +90,9 @@ async def upgrade_db_v7(conn: Connection):
     await conn.execute(
         """ALTER TABLE talks ADD COLUMN location character varying(128);"""
     )
+
+@upgrade_table.register(description="Enlarge talk title field")  # type: ignore
+async def upgrade_db_v8(conn: Connection):
+    await conn.execute(
+        """ALTER TABLE talks ALTER COLUMN talk_title TYPE character varying(256);"""
+    )
