@@ -26,12 +26,15 @@ from mautrix.types import (
     JoinRule,
     JoinRulesStateEventContent,
     Membership,
+    MemberStateEventContent,
     Obj,
     PowerLevelStateEventContent,
     RoomAlias,
     RoomAvatarStateEventContent,
     RoomCreatePreset,
     RoomID,
+    RoomNameStateEventContent,
+    RoomTopicStateEventContent,
     SpaceChildStateEventContent,
     SpaceParentStateEventContent,
     StateEvent,
@@ -108,6 +111,7 @@ class HopeBot(Plugin):
         if present:
             content.via = [child.split(":")[1]]
             content.suggested = suggested
+            # Typing whines about this, but I need to set it to None to clear it...
             content.order = order
         await self.client.send_state_event(space, EventType.SPACE_CHILD, content, child)
 
@@ -149,6 +153,8 @@ class HopeBot(Plugin):
             )
         for room_id, alltalks_child_state in talks_space.child_states.items():
             alltalks_child_content = alltalks_child_state.content
+            if not isinstance(alltalks_child_content, SpaceChildStateEventContent):
+                raise ValueError("Wrong StateEventContent type")
 
             if room_id not in talks:
                 self.log.error("Unknown room %r: Please run !sync_talks", room_id)
@@ -184,11 +190,13 @@ class HopeBot(Plugin):
             if livetalks_space:
                 in_livetalks = room_id in livetalks_space.child_states
                 if in_livetalks or nowish:
+                    child_state_evt = livetalks_space.child_states[room_id].content
+                    if not isinstance(child_state_evt, SpaceChildStateEventContent):
+                        raise ValueError("Wrong StateEventContent type")
                     if (
                         not in_livetalks
                         or not nowish
-                        or expect_order
-                        != livetalks_space.child_states[room_id].content.order
+                        or expect_order != child_state_evt.order
                     ):
                         self.log.debug(
                             "Updating live talk space child state for %r", room_id
@@ -443,6 +451,8 @@ class HopeBot(Plugin):
                 room_id=room_id,
                 event_type=EventType.ROOM_POWER_LEVELS,
             )
+            if not isinstance(power_level_evt, PowerLevelStateEventContent):
+                raise ValueError("Wrong StateEventContent type")
             if power_level_evt.users.get(user, 0) != 50:
                 power_level_evt.users[user] = 50
                 await evt.client.send_state_event(
@@ -503,6 +513,9 @@ class HopeBot(Plugin):
             room,
             order,
         )
+        if not isinstance(space_child_evt, SpaceChildStateEventContent):
+            raise ValueError("Wrong StateEventContent type")
+        # Typing whines about this, but I need to set it to None to clear it...
         space_child_evt.order = order
         await evt.client.send_state_event(
             space,
@@ -541,6 +554,8 @@ class HopeBot(Plugin):
                 "That room ID is invalid, I'm not in it, or I don't have admin there."
             )
             return
+        if not isinstance(power_level_evt, PowerLevelStateEventContent):
+            raise ValueError("Wrong StateEventContent type")
         if power_level_evt.users.get(target_user, 0) == 100:
             await evt.reply("That user is already admin")
             return
@@ -818,6 +833,8 @@ class HopeBot(Plugin):
                 room_id=room_id,
                 event_type=EventType.ROOM_NAME,
             )
+            if not isinstance(current_name_evt, RoomNameStateEventContent):
+                raise ValueError("Wrong StateEventContent type")
             if current_name_evt.name != chat_name:
                 delay += 1
                 self.log.debug(
@@ -839,6 +856,8 @@ class HopeBot(Plugin):
                 room_id=room_id,
                 event_type=EventType.ROOM_TOPIC,
             )
+            if not isinstance(current_topic_evt, RoomTopicStateEventContent):
+                raise ValueError("Wrong StateEventContent type")
             if current_topic_evt.topic != topic_plain:
                 delay += 1
                 self.log.debug(
@@ -872,6 +891,8 @@ class HopeBot(Plugin):
                     room_id=room_id,
                     event_type=EventType.ROOM_AVATAR,
                 )
+                if not isinstance(current_avatar_evt, RoomAvatarStateEventContent):
+                    raise ValueError("Wrong StateEventContent type")
                 current_avatar = current_avatar_evt.url
             except MNotFound:
                 current_avatar = None
@@ -920,6 +941,8 @@ class HopeBot(Plugin):
                     room_id=room_id,
                     event_type=EventType.ROOM_CANONICAL_ALIAS,
                 )
+                if not isinstance(canonical_alias_evt, CanonicalAliasStateEventContent):
+                    raise ValueError("Wrong StateEventContent type")
                 current_aliases = canonical_alias_evt.alt_aliases
                 if canonical_alias_evt.canonical_alias:
                     current_aliases = [
@@ -1148,11 +1171,13 @@ class HopeBot(Plugin):
 
     @event.on(EventType.ROOM_MEMBER)
     async def new_room(self, evt: StateEvent):
+        if not isinstance(evt.content, MemberStateEventContent):
+            raise ValueError("Wrong StateEventContent type")
         if (
             evt.content.membership != Membership.INVITE
             or not evt.content.is_direct
             # We get two INVITE events for encrypted rooms
-            or evt.unsigned.invite_room_state is not None
+            or (evt.unsigned is not None and evt.unsigned.invite_room_state is not None)
         ):
             return
         self.log.info("New room with %r", evt.sender)
