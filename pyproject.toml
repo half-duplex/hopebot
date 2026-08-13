@@ -14,8 +14,8 @@ license = "EUPL-1.2"
 license-files = ["LICENSE.txt"]
 requires-python = ">=3.11"
 dependencies = [
-    "maubot[encryption]~=0.5.2",
-    "asyncpg~=0.30.0",
+    "maubot[encryption]~=0.6.0",
+    "asyncpg~=0.31.0",
     "numpy~=2.0",
     "perlin-numpy~=0.0.1",
     "PySide6~=6.9",
@@ -27,14 +27,14 @@ Repository = "https://github.com/half-duplex/hopebot"
 
 [dependency-groups]
 dev = [
-    "black~=25.1",
+    "black~=26.5",
     "flake8~=7.3",
     "flake8-future-import ~= 0.4.7",
-    "flake8-isort ~= 6.1",
+    "flake8-isort ~= 7.0",
     "flake8-pyproject ~= 1.2",
     "flake8-type-checking ~= 3.0",
-    "mypy ~= 1.17.1",
-    "asyncpg-stubs~=0.30.2",
+    "mypy ~= 2.3.0",
+    "asyncpg-stubs~=0.31.3",
     "types-python-dateutil~=2.9",
 ]
 
