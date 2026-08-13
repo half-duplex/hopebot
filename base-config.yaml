@@ -9,7 +9,7 @@ enable_token_clearing: false
 # Set talk chat message/react/redact permissions to 50 (moderator+)
 talk_chats_locked: false
 # Message sent for help command, new PM rooms, and PMs not containing a token
-help: >-
+help: |-
   Hello!
 
   To access the HOPE spaces and chat rooms, send me
