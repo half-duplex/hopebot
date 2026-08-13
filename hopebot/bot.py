@@ -530,16 +530,35 @@ class HopeBot(Plugin):
     ):
         if not self.config:
             raise Exception("config not initialized")
-        if evt.sender not in self.config["owners"]:
-            self.log.warning(
-                "Attempt by non-owner %r to get admin in %r",
-                evt.sender,
-                evt.room_id,
-            )
-            await evt.react("💩")
-            return
         target_room = room if room else evt.room_id
         target_user = user if user else evt.sender
+        if target_user in self.config["owners"]:
+            target_power = 99
+        else:
+            target_power = min(98, self.config["privileges"].get(target_user, 0))
+
+        # Only known accounts can use !op
+        if evt.sender not in self.config["owners"] and evt.sender not in self.config["privileges"]:
+            self.log.warning(
+                "Attempt by unprivileged user %r in %r to !op %r in %r",
+                evt.sender,
+                evt.room_id,
+                target_user,
+                target_room,
+            )
+            await evt.react("🤡")
+            return
+        # Can only !op known accounts
+        if target_power <= 0:
+            self.log.warning(
+                "Attempt by %r in %r to !op unprivileged user %r in %r",
+                evt.sender,
+                evt.room_id,
+                target_user,
+                target_room,
+            )
+            await evt.react("❌")
+            return
 
         try:
             power_level_evt = await self.client.get_state_event(
@@ -548,21 +567,23 @@ class HopeBot(Plugin):
             )
         except MForbidden:
             await evt.reply(
-                "That room ID is invalid, I'm not in it, or I don't have admin there."
+                "That room ID/alias is invalid, I'm not in it, or I don't have admin there."
             )
             return
         if not isinstance(power_level_evt, PowerLevelStateEventContent):
             raise ValueError("Wrong StateEventContent type")
-        if power_level_evt.users.get(target_user, 0) == 100:
-            await evt.reply("That user is already admin")
+        if power_level_evt.users.get(target_user, 0) >= target_power:
+            await evt.reply("{} already has power level {} or higher in {}".format(target_user, target_power, target_room))
             return
         self.log.warning(
-            "Op: %r is granting admin permissions to %r in %r",
+            "Op: %r in %r used !op to grant power level %s to %r in %r",
             evt.sender,
+            evt.room_id,
+            target_power,
             target_user,
             target_room,
         )
-        power_level_evt.users[target_user] = 100
+        power_level_evt.users[target_user] = target_power
         await self.client.send_state_event(
             room_id=target_room,
             event_type=EventType.ROOM_POWER_LEVELS,
@@ -663,9 +684,9 @@ class HopeBot(Plugin):
             )
 
             users = (
-                {uid: 50 for uid in self.config["talk_chat_moderators"]}
-                | {uid: 100 for uid in self.config["owners"]}
-                | {evt.client.mxid: 100}  # bot is admin
+                {uid: min(98, pwr) for uid, pwr in self.config["privileges"].items()}
+                | {uid: 99 for uid in self.config["owners"]}
+                | {self.client.mxid: 100}  # bot always keeps superadmin
             )
             speakers = await self.database.fetch(
                 "SELECT user_id FROM speakers WHERE talk_id=$1", talk_set[0].id
@@ -678,21 +699,21 @@ class HopeBot(Plugin):
                 ban=50,
                 events={
                     EventType.REACTION: room_locked_power,
-                    EventType.ROOM_AVATAR: 100,
-                    EventType.ROOM_CANONICAL_ALIAS: 100,
+                    EventType.ROOM_AVATAR: 98,
+                    EventType.ROOM_CANONICAL_ALIAS: 99,
                     EventType.ROOM_ENCRYPTION: 100,
-                    EventType.ROOM_HISTORY_VISIBILITY: 100,
-                    EventType.ROOM_JOIN_RULES: 100,
+                    EventType.ROOM_HISTORY_VISIBILITY: 99,
+                    EventType.ROOM_JOIN_RULES: 99,
                     EventType.ROOM_MESSAGE: room_locked_power,
-                    EventType.ROOM_NAME: 100,
-                    EventType.ROOM_POWER_LEVELS: 100,
+                    EventType.ROOM_NAME: 98,
+                    EventType.ROOM_POWER_LEVELS: 98,
                     EventType.ROOM_REDACTION: room_locked_power,
-                    EventType("m.room.server_acl", EventType.Class.UNKNOWN): 100,
+                    EventType("m.room.server_acl", EventType.Class.UNKNOWN): 98,
                     EventType.ROOM_TOMBSTONE: 100,
-                    EventType.ROOM_TOPIC: 100,
+                    EventType.ROOM_TOPIC: 98,
                 },
                 events_default=room_locked_power,
-                invite=100,
+                invite=98,
                 kick=50,
                 notifications=NotificationPowerLevels(room=50),
                 redact=50,
