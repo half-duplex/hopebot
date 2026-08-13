@@ -600,393 +600,394 @@ class HopeBot(Plugin):
 
             chat_talks[talk.chat_name] = chat_talks.get(talk.chat_name, []) + [talk]
 
-        async with self.database.acquire() as conn:
-            for talk_set_idx, talk_set_unsorted in enumerate(chat_talks.values()):
-                # Sort for determinism (earliest is the one that gets the chat room, etc)
-                talk_set = sorted(talk_set_unsorted, key=lambda x: x.start)
-                chat_name = talk_set[0].chat_name
+        # the message edit causes a mysterious db error if it's in this `with` block...
+        #async with self.database.acquire() as conn:
+        for talk_set_idx, talk_set_unsorted in enumerate(chat_talks.values()):
+            # Sort for determinism (earliest is the one that gets the chat room, etc)
+            talk_set = sorted(talk_set_unsorted, key=lambda x: x.start)
+            chat_name = talk_set[0].chat_name
 
-                self.log.info(
-                    "Syncing talk set %d of %d: %r (*%d)",
-                    talk_set_idx,
-                    len(chat_talks),
-                    chat_name,
-                    len(talk_set),
+            self.log.info(
+                "Syncing talk set %d of %d: %r (*%d)",
+                talk_set_idx + 1,
+                len(chat_talks),
+                chat_name,
+                len(talk_set),
+            )
+
+            if not target_talk and status_msg:
+                await status_msg.edit(
+                    "This will take a long time. Synced {} of {}...".format(
+                        talk_set_idx + 1, len(chat_talks)
+                    )
                 )
 
-                if not target_talk and status_msg:
-                    await status_msg.edit(
-                        "This will take a long time. Synced {} of {}...".format(
-                            talk_set_idx, len(chat_talks)
-                        )
+            # API backoff
+            delay = 1
+
+            topic = talk_set[0].abstract + "<br>"
+            topic_plain = talk_set[0].abstract + "\n"
+            for talk in talk_set:
+                date = talk.start.astimezone(self.tz).strftime("%a %H:%M")
+                topic += "<br><a href='{2}'>{0} in {1}</a>".format(
+                    date, talk.room, talk.url
+                )
+                topic_plain += "\n- {} in {}, {}  ".format(
+                    date, talk.room, talk.url
+                )
+
+            join_rules_content = JoinRulesStateEventContent(
+                join_rule=JoinRule.RESTRICTED,
+                allow=[
+                    JoinRestriction(
+                        type=JoinRestrictionType.ROOM_MEMBERSHIP,
+                        room_id=self.config["rooms"]["attendee"],
+                    ),
+                    JoinRestriction(
+                        type=JoinRestrictionType.ROOM_MEMBERSHIP,
+                        room_id=self.config["rooms"]["talks"],
+                    ),
+                ],
+            )
+
+            users = (
+                {uid: 50 for uid in self.config["talk_chat_moderators"]}
+                | {uid: 100 for uid in self.config["owners"]}
+                | {evt.client.mxid: 100}  # bot is admin
+            )
+            speakers = await self.database.fetch(
+                "SELECT user_id FROM speakers WHERE talk_id=$1", talk_set[0].id
+            )
+            for row in speakers:
+                users[row["user_id"]] = 50
+
+            room_locked_power = 50 if self.config["talk_chats_locked"] else 0
+            power_level_content = PowerLevelStateEventContent(
+                ban=50,
+                events={
+                    EventType.REACTION: room_locked_power,
+                    EventType.ROOM_AVATAR: 100,
+                    EventType.ROOM_CANONICAL_ALIAS: 100,
+                    EventType.ROOM_ENCRYPTION: 100,
+                    EventType.ROOM_HISTORY_VISIBILITY: 100,
+                    EventType.ROOM_JOIN_RULES: 100,
+                    EventType.ROOM_MESSAGE: room_locked_power,
+                    EventType.ROOM_NAME: 100,
+                    EventType.ROOM_POWER_LEVELS: 100,
+                    EventType.ROOM_REDACTION: room_locked_power,
+                    EventType("m.room.server_acl", EventType.Class.UNKNOWN): 100,
+                    EventType.ROOM_TOMBSTONE: 100,
+                    EventType.ROOM_TOPIC: 100,
+                },
+                events_default=room_locked_power,
+                invite=100,
+                kick=50,
+                notifications=NotificationPowerLevels(room=50),
+                redact=50,
+                state_default=50,
+                users=users,
+            )
+
+            row = None
+            room_id: RoomID | None = None
+            for talk in reversed(
+                talk_set
+            ):  # [0] last, to use those IDs for the set
+                row = await self.database.fetchrow(
+                    """SELECT room_id, start_ts, end_ts, talk_title, location
+                    FROM talks WHERE talk_id = $1""",
+                    talk.id,
+                )
+                if row is None:
+                    continue
+                room_id, start, end, title, location = row
+
+                # Check times
+                if (
+                    start != talk.start
+                    or end != talk.end
+                    or title != talk.title
+                    or location != talk.room
+                ):
+                    self.log.debug(
+                        "Updating start/end/title/location for %r", talk.id
+                    )
+                    await self.database.execute(
+                        """UPDATE talks
+                        SET (start_ts, end_ts, talk_title, location) = ($1, $2, $3, $4)
+                        WHERE talk_id = $5""",
+                        talk.start,
+                        talk.end,
+                        talk.title,
+                        talk.room,
+                        talk.id,
                     )
 
-                # API backoff
-                delay = 1
-
-                topic = talk_set[0].abstract + "<br>"
-                topic_plain = talk_set[0].abstract + "\n"
-                for talk in talk_set:
-                    date = talk.start.astimezone(self.tz).strftime("%a %H:%M")
-                    topic += "<br><a href='{2}'>{0} in {1}</a>".format(
-                        date, talk.room, talk.url
-                    )
-                    topic_plain += "\n- {} in {}, {}  ".format(
-                        date, talk.room, talk.url
-                    )
-
-                join_rules_content = JoinRulesStateEventContent(
-                    join_rule=JoinRule.RESTRICTED,
-                    allow=[
-                        JoinRestriction(
-                            type=JoinRestrictionType.ROOM_MEMBERSHIP,
-                            room_id=self.config["rooms"]["attendee"],
+            if row is None:  # create chat for talk
+                delay += 3
+                avatar_url = await self.create_avatar(evt.client, talk_set[0].id)
+                room_id = await evt.client.create_room(
+                    name=chat_name,
+                    preset=RoomCreatePreset.TRUSTED_PRIVATE,
+                    invitees=[],
+                    initial_state=[
+                        StrippedStateEvent(
+                            type=EventType.SPACE_PARENT,
+                            state_key=self.config["rooms"]["talks"],
+                            content=SpaceParentStateEventContent(
+                                canonical=True,
+                                via=[self.config["rooms"]["talks"].split(":")[1]],
+                            ),
                         ),
-                        JoinRestriction(
-                            type=JoinRestrictionType.ROOM_MEMBERSHIP,
-                            room_id=self.config["rooms"]["talks"],
+                        StrippedStateEvent(
+                            type=EventType.ROOM_JOIN_RULES,
+                            content=join_rules_content,
+                        ),
+                        StrippedStateEvent(
+                            type=EventType.ROOM_TOPIC,
+                            # RoomTopicStateEventContent can't do html too
+                            # **{} so I can pass m.topic
+                            # https://spec.matrix.org/latest/client-server-api/#mroomtopic
+                            content=Obj(
+                                **{
+                                    "topic": topic_plain,
+                                    "m.topic": {
+                                        "m.text": [
+                                            {
+                                                "mimetype": "text/html",
+                                                "body": topic,
+                                            },
+                                            {
+                                                "mimetype": "text/plain",
+                                                "body": topic_plain,
+                                            },
+                                        ],
+                                    },
+                                }
+                            ),
+                        ),
+                        StrippedStateEvent(
+                            type=EventType.ROOM_AVATAR,
+                            content=RoomAvatarStateEventContent(url=avatar_url),
+                        ),
+                        StrippedStateEvent(
+                            type=EventType.ROOM_POWER_LEVELS,
+                            content=power_level_content,
                         ),
                     ],
                 )
-
-                users = (
-                    {uid: 50 for uid in self.config["talk_chat_moderators"]}
-                    | {uid: 100 for uid in self.config["owners"]}
-                    | {evt.client.mxid: 100}  # bot is admin
-                )
-                speakers = await self.database.fetch(
-                    "SELECT user_id FROM speakers WHERE talk_id=$1", talk_set[0].id
-                )
-                for row in speakers:
-                    users[row["user_id"]] = 50
-
-                room_locked_power = 50 if self.config["talk_chats_locked"] else 0
-                power_level_content = PowerLevelStateEventContent(
-                    ban=50,
-                    events={
-                        EventType.REACTION: room_locked_power,
-                        EventType.ROOM_AVATAR: 100,
-                        EventType.ROOM_CANONICAL_ALIAS: 100,
-                        EventType.ROOM_ENCRYPTION: 100,
-                        EventType.ROOM_HISTORY_VISIBILITY: 100,
-                        EventType.ROOM_JOIN_RULES: 100,
-                        EventType.ROOM_MESSAGE: room_locked_power,
-                        EventType.ROOM_NAME: 100,
-                        EventType.ROOM_POWER_LEVELS: 100,
-                        EventType.ROOM_REDACTION: room_locked_power,
-                        EventType("m.room.server_acl", EventType.Class.UNKNOWN): 100,
-                        EventType.ROOM_TOMBSTONE: 100,
-                        EventType.ROOM_TOPIC: 100,
-                    },
-                    events_default=room_locked_power,
-                    invite=100,
-                    kick=50,
-                    notifications=NotificationPowerLevels(room=50),
-                    redact=50,
-                    state_default=50,
-                    users=users,
+                if not room_id:
+                    self.log.error("Error creating room for %r", chat_name)
+                    continue
+                await evt.client.send_state_event(
+                    self.config["rooms"]["talks"],
+                    EventType.SPACE_CHILD,
+                    content=SpaceChildStateEventContent(
+                        via=[room_id.split(":")[1]]
+                    ),
+                    state_key=room_id,
                 )
 
-                row = None
-                room_id: RoomID | None = None
-                for talk in reversed(
-                    talk_set
-                ):  # [0] last, to use those IDs for the set
-                    row = await conn.fetchrow(
-                        """SELECT room_id, start_ts, end_ts, talk_title, location
-                        FROM talks WHERE talk_id = $1""",
-                        talk.id,
-                    )
-                    if row is None:
-                        continue
-                    room_id, start, end, title, location = row
-
-                    # Check times
-                    if (
-                        start != talk.start
-                        or end != talk.end
-                        or title != talk.title
-                        or location != talk.room
-                    ):
-                        self.log.debug(
-                            "Updating start/end/title/location for %r", talk.id
-                        )
-                        await conn.execute(
-                            """UPDATE talks
-                            SET (start_ts, end_ts, talk_title, location) = ($1, $2, $3, $4)
-                            WHERE talk_id = $5""",
+                self.log.info("Created room %r for %r", room_id, chat_name)
+                await self.database.executemany(
+                    """INSERT INTO talks
+                        (talk_id, talk_shortcode, room_id, start_ts,
+                            end_ts, talk_title, location)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+                    (
+                        (
+                            talk.id,
+                            talk.shortcode,
+                            room_id,
                             talk.start,
                             talk.end,
                             talk.title,
                             talk.room,
-                            talk.id,
                         )
+                        for talk in talk_set
+                    ),
+                )
 
-                if row is None:  # create chat for talk
-                    delay += 3
-                    avatar_url = await self.create_avatar(evt.client, talk_set[0].id)
-                    room_id = await evt.client.create_room(
-                        name=chat_name,
-                        preset=RoomCreatePreset.TRUSTED_PRIVATE,
-                        invitees=[],
-                        initial_state=[
-                            StrippedStateEvent(
-                                type=EventType.SPACE_PARENT,
-                                state_key=self.config["rooms"]["talks"],
-                                content=SpaceParentStateEventContent(
-                                    canonical=True,
-                                    via=[self.config["rooms"]["talks"].split(":")[1]],
-                                ),
-                            ),
-                            StrippedStateEvent(
-                                type=EventType.ROOM_JOIN_RULES,
-                                content=join_rules_content,
-                            ),
-                            StrippedStateEvent(
-                                type=EventType.ROOM_TOPIC,
-                                # RoomTopicStateEventContent can't do html too
-                                # **{} so I can pass m.topic
-                                # https://spec.matrix.org/latest/client-server-api/#mroomtopic
-                                content=Obj(
-                                    **{
-                                        "topic": topic_plain,
-                                        "m.topic": {
-                                            "m.text": [
-                                                {
-                                                    "mimetype": "text/html",
-                                                    "body": topic,
-                                                },
-                                                {
-                                                    "mimetype": "text/plain",
-                                                    "body": topic_plain,
-                                                },
-                                            ],
-                                        },
-                                    }
-                                ),
-                            ),
-                            StrippedStateEvent(
-                                type=EventType.ROOM_AVATAR,
-                                content=RoomAvatarStateEventContent(url=avatar_url),
-                            ),
-                            StrippedStateEvent(
-                                type=EventType.ROOM_POWER_LEVELS,
-                                content=power_level_content,
-                            ),
-                        ],
-                    )
-                    if not room_id:
-                        self.log.error("Error creating room for %r", chat_name)
-                        continue
-                    await evt.client.send_state_event(
-                        self.config["rooms"]["talks"],
-                        EventType.SPACE_CHILD,
-                        content=SpaceChildStateEventContent(
-                            via=[room_id.split(":")[1]]
-                        ),
-                        state_key=room_id,
-                    )
+            if not room_id:
+                raise Exception(
+                    "Impossible! I made it past room find/create without a room_id"
+                )
 
-                    self.log.info("Created room %r for %r", room_id, chat_name)
-                    await conn.executemany(
-                        """INSERT INTO talks
-                            (talk_id, talk_shortcode, room_id, start_ts,
-                                end_ts, talk_title, location)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-                        (
-                            (
-                                talk.id,
-                                talk.shortcode,
-                                room_id,
-                                talk.start,
-                                talk.end,
-                                talk.title,
-                                talk.room,
-                            )
-                            for talk in talk_set
-                        ),
-                    )
-
-                if not room_id:
-                    raise Exception(
-                        "Impossible! I made it past room find/create without a room_id"
-                    )
-
-                # Match room name
-                current_name_evt = await evt.client.get_state_event(
+            # Match room name
+            current_name_evt = await evt.client.get_state_event(
+                room_id=room_id,
+                event_type=EventType.ROOM_NAME,
+            )
+            if current_name_evt.name != chat_name:
+                delay += 1
+                self.log.debug(
+                    "Updating room name for %r from %r to %r",
+                    room_id,
+                    current_name_evt.name,
+                    chat_name,
+                )
+                await evt.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_NAME,
+                    content={
+                        "name": chat_name,
+                    },
                 )
-                if current_name_evt.name != chat_name:
-                    delay += 1
-                    self.log.debug(
-                        "Updating room name for %r from %r to %r",
-                        room_id,
-                        current_name_evt.name,
-                        chat_name,
-                    )
-                    await evt.client.send_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_NAME,
-                        content={
-                            "name": chat_name,
-                        },
-                    )
 
-                # Match topic
-                current_topic_evt = await evt.client.get_state_event(
+            # Match topic
+            current_topic_evt = await evt.client.get_state_event(
+                room_id=room_id,
+                event_type=EventType.ROOM_TOPIC,
+            )
+            if current_topic_evt.topic != topic_plain:
+                delay += 1
+                self.log.debug(
+                    "Updating room topic for %r (%r)", room_id, chat_name
+                )
+                await evt.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_TOPIC,
+                    content=Obj(
+                        **{
+                            "topic": topic_plain,
+                            "m.topic": {
+                                "m.text": [
+                                    {
+                                        "mimetype": "text/html",
+                                        "body": topic,
+                                    },
+                                    {
+                                        "mimetype": "text/plain",
+                                        "body": topic_plain,
+                                    },
+                                ],
+                            },
+                        }
+                    ),
                 )
-                if current_topic_evt.topic != topic_plain:
-                    delay += 1
-                    self.log.debug(
-                        "Updating room topic for %r (%r)", room_id, chat_name
-                    )
-                    await evt.client.send_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_TOPIC,
-                        content=Obj(
-                            **{
-                                "topic": topic_plain,
-                                "m.topic": {
-                                    "m.text": [
-                                        {
-                                            "mimetype": "text/html",
-                                            "body": topic,
-                                        },
-                                        {
-                                            "mimetype": "text/plain",
-                                            "body": topic_plain,
-                                        },
-                                    ],
-                                },
-                            }
-                        ),
-                    )
 
-                # Set avatar
-                try:
-                    current_avatar_evt = await evt.client.get_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_AVATAR,
-                    )
-                    current_avatar = current_avatar_evt.url
-                except MNotFound:
-                    current_avatar = None
-                if not current_avatar:
-                    delay += 2
-                    self.log.debug(
-                        "Setting avatar for for %r (%r)",
-                        room_id,
-                        chat_name,
-                    )
-                    avatar_url = await self.create_avatar(evt.client, talk_set[0].id)
-                    await evt.client.send_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_AVATAR,
-                        content={
-                            "url": avatar_url,
-                        },
-                    )
+            # Set avatar
+            try:
+                current_avatar_evt = await evt.client.get_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_AVATAR,
+                )
+                current_avatar = current_avatar_evt.url
+            except MNotFound:
+                current_avatar = None
+            if not current_avatar:
+                delay += 2
+                self.log.debug(
+                    "Setting avatar for for %r (%r)",
+                    room_id,
+                    chat_name,
+                )
+                avatar_url = await self.create_avatar(evt.client, talk_set[0].id)
+                await evt.client.send_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_AVATAR,
+                    content={
+                        "url": avatar_url,
+                    },
+                )
 
-                # Match permissions
-                power_level_evt = await evt.client.get_state_event(
+            # Match permissions
+            power_level_evt = await evt.client.get_state_event(
+                room_id=room_id,
+                event_type=EventType.ROOM_POWER_LEVELS,
+            )
+            if power_level_evt != power_level_content:
+                delay += 1
+                self.log.debug(
+                    "Updating permissions for %r (%r), was: %r",
+                    room_id,
+                    chat_name,
+                    power_level_evt,
+                )
+                await evt.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_POWER_LEVELS,
+                    content=power_level_content,
                 )
-                if power_level_evt != power_level_content:
-                    delay += 1
-                    self.log.debug(
-                        "Updating permissions for %r (%r), was: %r",
-                        room_id,
-                        chat_name,
-                        power_level_evt,
-                    )
-                    await evt.client.send_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_POWER_LEVELS,
-                        content=power_level_content,
-                    )
 
-                # Match aliases
-                aliases = [
-                    RoomAlias("#{}:hope.net".format(talk.shortcode))
-                    for talk in talk_set
-                ]
+            # Match aliases
+            aliases = [
+                RoomAlias("#{}:hope.net".format(talk.shortcode))
+                for talk in talk_set
+            ]
+            try:
+                canonical_alias_evt = await evt.client.get_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_CANONICAL_ALIAS,
+                )
+                current_aliases = canonical_alias_evt.alt_aliases
+                if canonical_alias_evt.canonical_alias:
+                    current_aliases = [
+                        canonical_alias_evt.canonical_alias
+                    ] + aliases
+            except MNotFound:
+                current_aliases = []
+            # Except when I break stuff, we probably don't want to clear
+            # manually-created aliases
+            bad_aliases: set[RoomAlias] = (
+                set()
+            )  # set(current_aliases) - set(aliases)
+            for alias in bad_aliases:
+                delay += 1
+                self.log.debug(
+                    "Removing alias for %r (%r): %r", room_id, chat_name, alias
+                )
+                room_shortcode = alias.split("#")[1].split(":")[0]
+                await evt.client.remove_room_alias(room_shortcode)
+            missing_aliases = set(aliases) - set(current_aliases)
+            for alias in missing_aliases:
+                delay += 1
+                self.log.debug(
+                    "Adding alias for %r (%r): %r",
+                    room_id,
+                    chat_name,
+                    alias,
+                )
+                room_shortcode = alias.split("#")[1].split(":")[0]
                 try:
-                    canonical_alias_evt = await evt.client.get_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_CANONICAL_ALIAS,
-                    )
-                    current_aliases = canonical_alias_evt.alt_aliases
-                    if canonical_alias_evt.canonical_alias:
-                        current_aliases = [
-                            canonical_alias_evt.canonical_alias
-                        ] + aliases
-                except MNotFound:
-                    current_aliases = []
-                # Except when I break stuff, we probably don't want to clear
-                # manually-created aliases
-                bad_aliases: set[RoomAlias] = (
-                    set()
-                )  # set(current_aliases) - set(aliases)
-                for alias in bad_aliases:
-                    delay += 1
-                    self.log.debug(
-                        "Removing alias for %r (%r): %r", room_id, chat_name, alias
-                    )
-                    room_shortcode = alias.split("#")[1].split(":")[0]
-                    await evt.client.remove_room_alias(room_shortcode)
-                missing_aliases = set(aliases) - set(current_aliases)
-                for alias in missing_aliases:
-                    delay += 1
-                    self.log.debug(
-                        "Adding alias for %r (%r): %r",
-                        room_id,
-                        chat_name,
-                        alias,
-                    )
-                    room_shortcode = alias.split("#")[1].split(":")[0]
-                    try:
+                    await evt.client.add_room_alias(room_id, room_shortcode)
+                except MRoomInUse:
+                    alias_evt = await evt.client.resolve_room_alias(alias)
+                    if alias_evt.room_id != room_id:
+                        await evt.client.remove_room_alias(room_shortcode)
                         await evt.client.add_room_alias(room_id, room_shortcode)
-                    except MRoomInUse:
-                        alias_evt = await evt.client.resolve_room_alias(alias)
-                        if alias_evt.room_id != room_id:
-                            await evt.client.remove_room_alias(room_shortcode)
-                            await evt.client.add_room_alias(room_id, room_shortcode)
-                if bad_aliases or missing_aliases:
-                    delay += 1
-                    await evt.client.send_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_CANONICAL_ALIAS,
-                        content=CanonicalAliasStateEventContent(
-                            canonical_alias=aliases[0], alt_aliases=aliases[1:]
-                        ),
-                    )
+            if bad_aliases or missing_aliases:
+                delay += 1
+                await evt.client.send_state_event(
+                    room_id=room_id,
+                    event_type=EventType.ROOM_CANONICAL_ALIAS,
+                    content=CanonicalAliasStateEventContent(
+                        canonical_alias=aliases[0], alt_aliases=aliases[1:]
+                    ),
+                )
 
-                # Match join rules
-                current_join_rules_evt = await evt.client.get_state_event(
+            # Match join rules
+            current_join_rules_evt = await evt.client.get_state_event(
+                room_id=room_id,
+                event_type=EventType.ROOM_JOIN_RULES,
+            )
+            if current_join_rules_evt != join_rules_content:
+                delay += 1
+                self.log.debug(
+                    "Updating join rules for %r (%r), was: %r",
+                    room_id,
+                    chat_name,
+                    current_join_rules_evt,
+                )
+                await evt.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_JOIN_RULES,
+                    content=join_rules_content,
                 )
-                if current_join_rules_evt != join_rules_content:
-                    delay += 1
-                    self.log.debug(
-                        "Updating join rules for %r (%r), was: %r",
-                        room_id,
-                        chat_name,
-                        current_join_rules_evt,
-                    )
-                    await evt.client.send_state_event(
-                        room_id=room_id,
-                        event_type=EventType.ROOM_JOIN_RULES,
-                        content=join_rules_content,
-                    )
 
-                # TODO: match more room info - space membership? perms?
+            # TODO: match more room info - space membership? perms?
 
-                await sleep(delay * self.config.get("ratelimit_multiplier", 2))
+            await sleep(delay * self.config.get("ratelimit_multiplier", 2))
 
         await evt.client.set_typing(evt.room_id, 0)
         await evt.reply("Done!")
@@ -1229,19 +1230,12 @@ class HopeBot(Plugin):
         token_hash = sha256(token.encode()).digest()
         async with self.database.acquire() as conn:
             await conn.execute("BEGIN TRANSACTION")
+
             token_rows = await conn.fetch(
                 "SELECT * FROM tokens WHERE token_hash = $1 FOR UPDATE",
                 token_hash,
             )
 
-            if not token_rows:
-                if pm:
-                    await evt.reply(
-                        "Sorry, that's not a valid token. If you're sure it's "
-                        "correct, I might not have been told about it yet - "
-                        "Wait a while and try again."
-                    )
-                return
             if not all(row["used_at"] for row in token_rows):
                 self.log.info("Marking token used: %r %r", evt.sender, token)
                 await conn.execute(
@@ -1252,7 +1246,17 @@ class HopeBot(Plugin):
                     evt.sender,
                     token_hash,
                 )
+
             await conn.execute("COMMIT")
+
+        if not token_rows:
+            if pm:
+                await evt.reply(
+                    "Sorry, that's not a valid token. If you're sure it's "
+                    "correct, I might not have been told about it yet - "
+                    "Wait a while and try again."
+                )
+            return
 
         used_by = {row["used_by"] for row in token_rows}.pop()
         if used_by and used_by != evt.sender:
@@ -1264,8 +1268,7 @@ class HopeBot(Plugin):
             )
             if pm:
                 await evt.reply(
-                    "Sorry, that token has already been used by someone else. "
-                    "Are you on the correct account?"
+                    "Sorry, that token has already been used by a different matrix account."
                 )
             return
 
