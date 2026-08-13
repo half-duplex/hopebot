@@ -338,7 +338,7 @@ class HopeBot(Plugin):
             raise Exception("Config not initialized")
         quoted = None
         if evt.content.relates_to.in_reply_to:
-            quoted = await evt.client.get_event(
+            quoted = await self.client.get_event(
                 evt.room_id, evt.content.relates_to.in_reply_to.event_id
             )
         help_evt = await evt.reply("Help is on the way 🚨")
@@ -356,7 +356,7 @@ class HopeBot(Plugin):
                 evt.content.body,
             )
         )
-        await evt.client.send_text(self.config["rooms"]["moderation"], html=message)
+        await self.client.send_text(self.config["rooms"]["moderation"], html=message)
 
     @command.new()
     async def stats(self, evt: MaubotMessageEvent):
@@ -447,7 +447,7 @@ class HopeBot(Plugin):
             self.log.info("%r added %r as a speaker for %r", evt.sender, user, talk_id)
             await evt.react("✔️")
 
-            power_level_evt = await evt.client.get_state_event(
+            power_level_evt = await self.client.get_state_event(
                 room_id=room_id,
                 event_type=EventType.ROOM_POWER_LEVELS,
             )
@@ -455,14 +455,14 @@ class HopeBot(Plugin):
                 raise ValueError("Wrong StateEventContent type")
             if power_level_evt.users.get(user, 0) != 50:
                 power_level_evt.users[user] = 50
-                await evt.client.send_state_event(
+                await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_POWER_LEVELS,
                     content=power_level_evt,
                 )
 
             try:  # to invite them to the presenters space
-                await evt.client.invite_user(self.config["rooms"]["presenter"], user)
+                await self.client.invite_user(self.config["rooms"]["presenter"], user)
             except (KeyError, MForbidden):
                 pass
             else:
@@ -497,7 +497,7 @@ class HopeBot(Plugin):
                 return
 
         try:
-            space_child_evt = await evt.client.get_state_event(
+            space_child_evt = await self.client.get_state_event(
                 room_id=space,
                 state_key=room,
                 event_type=EventType.SPACE_CHILD,
@@ -517,7 +517,7 @@ class HopeBot(Plugin):
             raise ValueError("Wrong StateEventContent type")
         # Typing whines about this, but I need to set it to None to clear it...
         space_child_evt.order = order
-        await evt.client.send_state_event(
+        await self.client.send_state_event(
             space,
             EventType.SPACE_CHILD,
             space_child_evt,
@@ -545,7 +545,7 @@ class HopeBot(Plugin):
         target_user = user if user else evt.sender
 
         try:
-            power_level_evt = await evt.client.get_state_event(
+            power_level_evt = await self.client.get_state_event(
                 room_id=target_room,
                 event_type=EventType.ROOM_POWER_LEVELS,
             )
@@ -566,7 +566,7 @@ class HopeBot(Plugin):
             target_room,
         )
         power_level_evt.users[target_user] = 100
-        await evt.client.send_state_event(
+        await self.client.send_state_event(
             room_id=target_room,
             event_type=EventType.ROOM_POWER_LEVELS,
             content=power_level_evt,
@@ -740,8 +740,8 @@ class HopeBot(Plugin):
 
             if row is None:  # create chat for talk
                 delay += 3
-                avatar_url = await self.create_avatar(evt.client, talk_set[0].id)
-                room_id = await evt.client.create_room(
+                avatar_url = await self.create_avatar(self.client, talk_set[0].id)
+                room_id = await self.client.create_room(
                     name=chat_name,
                     preset=RoomCreatePreset.TRUSTED_PRIVATE,
                     invitees=[],
@@ -794,7 +794,7 @@ class HopeBot(Plugin):
                 if not room_id:
                     self.log.error("Error creating room for %r", chat_name)
                     continue
-                await evt.client.send_state_event(
+                await self.client.send_state_event(
                     self.config["rooms"]["talks"],
                     EventType.SPACE_CHILD,
                     content=SpaceChildStateEventContent(
@@ -829,7 +829,7 @@ class HopeBot(Plugin):
                 )
 
             # Match room name
-            current_name_evt = await evt.client.get_state_event(
+            current_name_evt = await self.client.get_state_event(
                 room_id=room_id,
                 event_type=EventType.ROOM_NAME,
             )
@@ -843,7 +843,7 @@ class HopeBot(Plugin):
                     current_name_evt.name,
                     chat_name,
                 )
-                await evt.client.send_state_event(
+                await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_NAME,
                     content={
@@ -852,7 +852,7 @@ class HopeBot(Plugin):
                 )
 
             # Match topic
-            current_topic_evt = await evt.client.get_state_event(
+            current_topic_evt = await self.client.get_state_event(
                 room_id=room_id,
                 event_type=EventType.ROOM_TOPIC,
             )
@@ -863,7 +863,7 @@ class HopeBot(Plugin):
                 self.log.debug(
                     "Updating room topic for %r (%r)", room_id, chat_name
                 )
-                await evt.client.send_state_event(
+                await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_TOPIC,
                     content=Obj(
@@ -887,7 +887,7 @@ class HopeBot(Plugin):
 
             # Set avatar
             try:
-                current_avatar_evt = await evt.client.get_state_event(
+                current_avatar_evt = await self.client.get_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_AVATAR,
                 )
@@ -903,8 +903,8 @@ class HopeBot(Plugin):
                     room_id,
                     chat_name,
                 )
-                avatar_url = await self.create_avatar(evt.client, talk_set[0].id)
-                await evt.client.send_state_event(
+                avatar_url = await self.create_avatar(self.client, talk_set[0].id)
+                await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_AVATAR,
                     content={
@@ -913,7 +913,7 @@ class HopeBot(Plugin):
                 )
 
             # Match permissions
-            power_level_evt = await evt.client.get_state_event(
+            power_level_evt = await self.client.get_state_event(
                 room_id=room_id,
                 event_type=EventType.ROOM_POWER_LEVELS,
             )
@@ -925,7 +925,7 @@ class HopeBot(Plugin):
                     chat_name,
                     power_level_evt,
                 )
-                await evt.client.send_state_event(
+                await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_POWER_LEVELS,
                     content=power_level_content,
@@ -937,7 +937,7 @@ class HopeBot(Plugin):
                 for talk in talk_set
             ]
             try:
-                canonical_alias_evt = await evt.client.get_state_event(
+                canonical_alias_evt = await self.client.get_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_CANONICAL_ALIAS,
                 )
@@ -961,7 +961,7 @@ class HopeBot(Plugin):
                     "Removing alias for %r (%r): %r", room_id, chat_name, alias
                 )
                 room_shortcode = alias.split("#")[1].split(":")[0]
-                await evt.client.remove_room_alias(room_shortcode)
+                await self.client.remove_room_alias(room_shortcode)
             missing_aliases = set(aliases) - set(current_aliases)
             for alias in missing_aliases:
                 delay += 1
@@ -973,15 +973,15 @@ class HopeBot(Plugin):
                 )
                 room_shortcode = alias.split("#")[1].split(":")[0]
                 try:
-                    await evt.client.add_room_alias(room_id, room_shortcode)
+                    await self.client.add_room_alias(room_id, room_shortcode)
                 except MRoomInUse:
-                    alias_evt = await evt.client.resolve_room_alias(alias)
+                    alias_evt = await self.client.resolve_room_alias(alias)
                     if alias_evt.room_id != room_id:
-                        await evt.client.remove_room_alias(room_shortcode)
-                        await evt.client.add_room_alias(room_id, room_shortcode)
+                        await self.client.remove_room_alias(room_shortcode)
+                        await self.client.add_room_alias(room_id, room_shortcode)
             if bad_aliases or missing_aliases:
                 delay += 1
-                await evt.client.send_state_event(
+                await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_CANONICAL_ALIAS,
                     content=CanonicalAliasStateEventContent(
@@ -990,7 +990,7 @@ class HopeBot(Plugin):
                 )
 
             # Match join rules
-            current_join_rules_evt = await evt.client.get_state_event(
+            current_join_rules_evt = await self.client.get_state_event(
                 room_id=room_id,
                 event_type=EventType.ROOM_JOIN_RULES,
             )
@@ -1002,7 +1002,7 @@ class HopeBot(Plugin):
                     chat_name,
                     current_join_rules_evt,
                 )
-                await evt.client.send_state_event(
+                await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_JOIN_RULES,
                     content=join_rules_content,
@@ -1012,7 +1012,7 @@ class HopeBot(Plugin):
 
             await sleep(delay * self.config.get("ratelimit_multiplier", 2))
 
-        await evt.client.set_typing(evt.room_id, 0)
+        await self.client.set_typing(evt.room_id, 0)
         await evt.reply("Done!")
 
     async def create_avatar(self, client, seed):
@@ -1182,12 +1182,12 @@ class HopeBot(Plugin):
             return
         self.log.info("New room with %r", evt.sender)
         async with self.direct_update_lock:
-            direct_rooms = await evt.client.get_account_data(EventType.DIRECT)
+            direct_rooms = await self.client.get_account_data(EventType.DIRECT)
             if evt.sender not in direct_rooms:
                 direct_rooms[evt.sender] = []
             direct_rooms[evt.sender].append(evt.room_id)
-            await evt.client.set_account_data(EventType.DIRECT, direct_rooms)
-        await self.sync_direct_rooms(evt.client)
+            await self.client.set_account_data(EventType.DIRECT, direct_rooms)
+        await self.sync_direct_rooms(self.client)
 
     async def sync_direct_rooms(self, client):
         self.log.info("Resyncing direct rooms")
@@ -1228,7 +1228,7 @@ class HopeBot(Plugin):
             return
 
         if not self.direct_rooms:
-            await self.sync_direct_rooms(evt.client)
+            await self.sync_direct_rooms(self.client)
         pm = evt.room_id in self.direct_rooms.get(evt.sender, [])
 
         self.log.debug(
@@ -1322,7 +1322,7 @@ class HopeBot(Plugin):
                 )
                 continue
             try:
-                await evt.client.invite_user(
+                await self.client.invite_user(
                     self.config["rooms"][d["type"]], evt.sender
                 )
             except MForbidden:
