@@ -760,7 +760,7 @@ class HopeBot(Plugin):
 
             if row is None:  # create chat for talk
                 delay += 3
-                avatar_url = await self.create_avatar(self.client, talk_set[0].id)
+                avatar_url = await self.create_avatar(talk_set[0].id)
                 room_id = await self.client.create_room(
                     name=chat_name,
                     preset=RoomCreatePreset.TRUSTED_PRIVATE,
@@ -919,7 +919,7 @@ class HopeBot(Plugin):
                     room_id,
                     chat_name,
                 )
-                avatar_url = await self.create_avatar(self.client, talk_set[0].id)
+                avatar_url = await self.create_avatar(talk_set[0].id)
                 await self.client.send_state_event(
                     room_id=room_id,
                     event_type=EventType.ROOM_AVATAR,
@@ -1026,13 +1026,13 @@ class HopeBot(Plugin):
         await self.client.set_typing(evt.room_id, 0)
         await evt.reply("Done!")
 
-    async def create_avatar(self, client, seed):
+    async def create_avatar(self, seed):
         self.log.info("Generating avatar for seed %d", seed)
         # importing up top adds unnecessary dependencies to token generation
         from .image_gen import draw_flow_field
 
         avatar_data = await draw_flow_field(500, 500, num=2, seed=seed)
-        return await client.upload_media(
+        return await self.client.upload_media(
             avatar_data,
             mime_type="image/jpeg",
         )
@@ -1199,11 +1199,11 @@ class HopeBot(Plugin):
                 direct_rooms[evt.sender] = []
             direct_rooms[evt.sender].append(evt.room_id)
             await self.client.set_account_data(EventType.DIRECT, direct_rooms)
-        await self.sync_direct_rooms(self.client)
+        await self.sync_direct_rooms()
 
-    async def sync_direct_rooms(self, client):
+    async def sync_direct_rooms(self):
         self.log.info("Resyncing direct rooms")
-        self.direct_rooms = await client.get_account_data(EventType.DIRECT)
+        self.direct_rooms = await self.client.get_account_data(EventType.DIRECT)
 
     @event.on(EventType.ROOM_MESSAGE)
     async def chat_message(self, evt: MaubotMessageEvent):
@@ -1240,7 +1240,7 @@ class HopeBot(Plugin):
             return
 
         if not self.direct_rooms:
-            await self.sync_direct_rooms(self.client)
+            await self.sync_direct_rooms()
         pm = evt.room_id in self.direct_rooms.get(evt.sender, [])
 
         self.log.debug(
