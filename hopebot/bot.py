@@ -657,7 +657,7 @@ class HopeBot(Plugin):
 
         status_msg = None
         if not target_talk:  # All
-            status_msg_evt_id = await evt.reply("This will take a long time...")
+            status_msg_evt_id = await evt.reply("This will take a few minutes...")
             status_msg = MaubotMessageEvent(
                 await self.client.get_event(evt.room_id, status_msg_evt_id), self.client
             )
@@ -689,7 +689,7 @@ class HopeBot(Plugin):
 
             if not target_talk and status_msg:
                 await status_msg.edit(
-                    "This will take a long time. Synced {} of {}...".format(
+                    "This will take a few minutes. Syncing {} of {}...".format(
                         talk_set_idx + 1, len(chat_talks)
                     )
                 )
@@ -964,6 +964,14 @@ class HopeBot(Plugin):
                 room_id=room_id,
                 event_type=EventType.ROOM_POWER_LEVELS,
             )
+            if not isinstance(power_level_evt, PowerLevelStateEventContent):
+                raise ValueError("Wrong StateEventContent type")
+            # Can't demote users with same or higher power, so leave them alone
+            my_power = power_level_evt.users[self.client.mxid]
+            for user_id, power in power_level_evt.users.items():
+                if user_id != self.client.mxid and power >= my_power:
+                    power_level_content.users[user_id] = power
+            # If different, update
             if power_level_evt != power_level_content:
                 delay += 1
                 self.log.debug(
@@ -1055,7 +1063,10 @@ class HopeBot(Plugin):
             await sleep(delay * self.config.get("ratelimit_multiplier", 2))
 
         await self.client.set_typing(evt.room_id, 0)
-        await evt.react("✔️")
+        if target_talk:
+            await evt.react("✔️")
+        else:
+            await evt.reply("Done!")
 
     async def create_avatar(self, seed):
         self.log.info("Generating avatar for seed %d", seed)
