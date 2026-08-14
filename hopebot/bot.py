@@ -189,14 +189,13 @@ class HopeBot(Plugin):
             if livetalks_space:
                 in_livetalks = room_id in livetalks_space.child_states
                 if in_livetalks or nowish:
-                    child_state_evt = livetalks_space.child_states[room_id].content
-                    if not isinstance(child_state_evt, SpaceChildStateEventContent):
-                        raise ValueError("Wrong StateEventContent type")
-                    if (
-                        not in_livetalks
-                        or not nowish
-                        or expect_order != child_state_evt.order
-                    ):
+                    order = None
+                    if in_livetalks:
+                        child_state_evt = livetalks_space.child_states[room_id].content
+                        if not isinstance(child_state_evt, SpaceChildStateEventContent):
+                            raise ValueError("Wrong StateEventContent type")
+                        order = child_state_evt.order
+                    if not in_livetalks or not nowish or order != expect_order:
                         self.log.debug(
                             "Updating live talk space child state for %r", room_id
                         )
