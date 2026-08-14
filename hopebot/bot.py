@@ -1196,21 +1196,48 @@ class HopeBot(Plugin):
         else:
             token_hash = bytes.fromhex(token)
 
-        d = await self.database.fetchrow(
-            "SELECT * FROM tokens WHERE token_hash = $1 FOR UPDATE",
+        rows = await self.database.fetch(
+            "SELECT * FROM tokens WHERE token_hash = $1",
             token_hash,
         )
 
-        if not d:
-            await evt.reply("Sorry, that's not a valid token/hash.")
-            return
-        if d["used_at"] is None:
-            await evt.reply("That token hasn't been used")
+        if not rows:
+            await evt.reply("That's not a known token/hash.")
             return
 
-        await evt.reply(
-            "That token was used by {} at {}".format(d["used_by"], d["used_at"])
-        )
+        replies = []
+        for d in rows:
+            if d["used_by"] is None:
+                replies.append("Unused for the {} space.".format(d["type"]))
+                continue
+
+            membership = None
+            space_id = self.config["rooms"].get(d["type"])
+            if space_id:
+                space_members = await self.client.get_joined_members(space_id)
+                if evt.sender in space_members:
+                    membership = space_members[evt.sender].membership
+                if membership == Membership.BAN:
+                    membership_text = "is now banned from"
+                elif membership == Membership.INVITE:
+                    membership_text = "hasn't accepted their invite to"
+                elif membership == Membership.JOIN:
+                    membership_text = "is currently in"
+                elif membership == Membership.LEAVE:
+                    membership_text = "joined then left"
+                else:
+                    membership_text = "???"
+            else:
+                membership_text = "deconfigured room"
+
+            used_at = d["used_at"].replace(microsecond=0)
+            replies.append(
+                "Used by {}, who {} the {} space, at {}".format(
+                    d["used_by"], membership_text, d["type"], used_at
+                )
+            )
+
+        await evt.reply("\n\n".join(replies))
 
     @event.on(EventType.ROOM_MEMBER)
     async def new_room(self, evt: StateEvent):
