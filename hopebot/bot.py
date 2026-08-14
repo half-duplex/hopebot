@@ -9,7 +9,6 @@ from asyncio import (
 from dataclasses import fields
 from datetime import datetime, timedelta, UTC
 from hashlib import sha256
-import logging
 import re
 from typing import TYPE_CHECKING
 
@@ -244,7 +243,7 @@ class HopeBot(Plugin):
                 + "\n".join(
                     [
                         "<b>{}</b> in {} from {} to {}".format(
-                            room_mention(
+                            await self.room_mention(
                                 talk["room_id"], text=talk["talk_title"], html=True
                             ),
                             talk["location"],
@@ -261,6 +260,35 @@ class HopeBot(Plugin):
                 self.config["rooms"]["announcements"],
                 html=announcements_room_message.replace("\n", "\n<br>"),
             )
+
+    async def get_canonical_alias(
+        self, room: RoomID | RoomAlias | str, alt_ok: bool = True
+    ) -> RoomAlias | None:
+        alias = None
+        try:
+            canonical_alias_evt = await self.client.get_state_event(
+                room_id=RoomID(room),
+                event_type=EventType.ROOM_CANONICAL_ALIAS,
+            )
+            if not isinstance(canonical_alias_evt, CanonicalAliasStateEventContent):
+                raise ValueError("Wrong StateEventContent type")
+            if canonical_alias_evt.canonical_alias:
+                alias = canonical_alias_evt.canonical_alias
+            elif alt_ok and canonical_alias_evt.alt_aliases:
+                alias = canonical_alias_evt.alt_aliases[0]
+        except Exception:
+            self.log.exception("Failed to find room alias")
+        return alias
+
+    async def room_mention(self, room: RoomID | RoomAlias | str, *args, **kwargs):
+        # Wraps utils.room_mention to try to use aliases (#) instead of
+        # internal room IDs (!), since some clients (NeoChat) don't like the
+        # latter.
+        if room.startswith("!"):
+            alias = await self.get_canonical_alias(room)
+            if alias:
+                room = alias
+        return room_mention(room, *args, **kwargs)
 
     async def get_talks(self) -> list[Talk]:
         if not self.config:
@@ -348,8 +376,10 @@ class HopeBot(Plugin):
             )
         message = (
             "@room, Moderators have been summoned to {} {}{}<br>{} wrote: {}".format(
-                room_mention(evt.room_id, text="room", html=True),
-                room_mention(evt.room_id, help_evt, text="(context)", html=True),
+                await self.room_mention(evt.room_id, text="room", html=True),
+                await self.room_mention(
+                    evt.room_id, help_evt, text="(context)", html=True
+                ),
                 reply_text,
                 evt.sender,
                 evt.content.body,
@@ -1233,7 +1263,10 @@ class HopeBot(Plugin):
                             isare=" are" if plural else "'s",
                             plur="s" if plural else "",
                             links=" ".join(
-                                [room_mention(room_id) for room_id in room_ids]
+                                [
+                                    await self.room_mention(room_id)
+                                    for room_id in room_ids
+                                ]
                             ),
                         )
                     )
