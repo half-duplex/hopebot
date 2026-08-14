@@ -708,10 +708,16 @@ class HopeBot(Plugin):
             topic_plain = talk_set[0].abstract + "\n"
             for talk in talk_set:
                 date = talk.start.astimezone(self.tz).strftime("%a %H:%M")
-                topic += "<br><a href='{2}'>{0} in {1}</a>".format(
-                    date, talk.room, talk.url
+                stream_text = stream_link = ""
+                if talk.room in self.config["streams"]:
+                    stream_url = self.config["streams"][talk.room]
+                    stream_text = " (stream: {} )".format(stream_url)
+                    stream_link = " (<a href='{}'>stream</a>)".format(stream_url)
+
+                topic += "<br><a href='{}'>{} in {}</a>{}".format(
+                    talk.url, date, talk.room, stream_link
                 )
-                topic_plain += "\n- {} in {}, {}  ".format(date, talk.room, talk.url)
+                topic_plain += "\n- {} in {}{}, {}  ".format(date, talk.room, stream_text, talk.url)
 
             join_rules_content = JoinRulesStateEventContent(
                 join_rule=JoinRule.RESTRICTED,
