@@ -219,11 +219,16 @@ class HopeBot(Plugin):
                     )
                     continue
 
-                state_text = "live" if live else "starting soon"
-                message = "{} is {}! {}, from {} to {}. @room".format(
-                    talk["talk_title"],
+                state_text = "Live" if live else "Starting soon"
+                stream_link = ""
+                if talk["location"] in self.config["streams"]:
+                    stream_link = " and <a href='{}'>streaming</a>".format(
+                        self.config["streams"][talk["location"]]
+                    )
+                message = "{}! {}{}, from {} to {}. @room".format(
                     state_text,
                     talk["location"],
+                    stream_link,
                     talk["start_ts"].astimezone(self.tz).strftime("%H:%M"),
                     talk["end_ts"].astimezone(self.tz).strftime("%H:%M"),
                 )
@@ -236,28 +241,31 @@ class HopeBot(Plugin):
             if livetalks_space:
                 self.talk_space_room_cache.pop(self.config["rooms"]["livetalks"])
 
-        if len(talks_to_announce) > 0:
-            announcements_room_message = (
-                "Talks and workshops starting soon:\n"
-                + "\n".join(
-                    [
-                        "<b>{}</b> in {} from {} to {}".format(
-                            await self.room_mention(
-                                talk["room_id"], text=talk["talk_title"], html=True
-                            ),
-                            talk["location"],
-                            talk["start_ts"].astimezone(self.tz).strftime("%H:%M"),
-                            talk["end_ts"].astimezone(self.tz).strftime("%H:%M"),
-                        )
-                        for talk in sorted(
-                            talks_to_announce, key=lambda t: t["start_ts"]
-                        )
-                    ]
+        if len(talks_to_announce) > 0 and "announcements" in self.config["rooms"]:
+            talk_lines = []
+            for talk in sorted(talks_to_announce, key=lambda t: t["start_ts"]):
+                stream_link = ""
+                if talk["location"] in self.config["streams"]:
+                    stream_link = " and <a href='{}'>streaming</a>".format(
+                        self.config["streams"][talk["location"]]
+                    )
+                talk_lines.append(
+                    "<b>{}</b><br>is in {}{} from {} to {}".format(
+                        await self.room_mention(
+                            talk["room_id"], text=talk["talk_title"], html=True
+                        ),
+                        talk["location"],
+                        stream_link,
+                        talk["start_ts"].astimezone(self.tz).strftime("%H:%M"),
+                        talk["end_ts"].astimezone(self.tz).strftime("%H:%M"),
+                    )
                 )
+            announcements_room_message = (
+                "<h2>Talks and workshops starting soon:</h2>" + "<br>".join(talk_lines)
             )
             await self.client.send_text(
                 self.config["rooms"]["announcements"],
-                html=announcements_room_message.replace("\n", "\n<br>"),
+                html=announcements_room_message,
             )
 
     async def get_canonical_alias(

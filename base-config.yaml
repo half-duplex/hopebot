@@ -3,6 +3,9 @@ token_regex: HOPE26::[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}
 pretalx_json_url: https://scheduler.hope.net/foo/schedule.json
 # The URL format for talk links, capturing the shortcode
 schedule_talk_regex: https://schedule.hope.net/hope26/talk/([a-z0-9]{5,})/
+# Map of room name to stream link
+streams:
+  'Grand Ballroom': https://hope.net/grand/
 # Enable `clear` and `truncate` arguments to !load_tokens
 # Disable this once testing is done and real tokens are loaded
 enable_token_clearing: false

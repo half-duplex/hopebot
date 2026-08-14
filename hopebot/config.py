@@ -14,6 +14,7 @@ class Config(BaseProxyConfig):
             "token_regex",
             "pretalx_json_url",
             "schedule_talk_regex",
+            "streams",
             "enable_token_clearing",
             "talk_chats_locked",
             "help",
