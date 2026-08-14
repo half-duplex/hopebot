@@ -1343,73 +1343,106 @@ class HopeBot(Plugin):
                 )
             return
 
-        invited_spaces = []
-        error_spaces = []
+        replies = []
+        successes = 0
         for d in token_rows:
-            self.log.info(
-                "Inviting %r to %r (%r)",
-                evt.sender,
-                d["type"],
-                self.config["rooms"].get(d["type"]),
-            )
-            if d["type"] not in self.config["rooms"]:
+            space_name = d["type"]
+            space_id = self.config["rooms"].get(d["type"])
+
+            if not space_id:
                 if pm:
-                    await evt.reply(
+                    replies.append(
                         (
-                            "Sorry, your {} token is configured incorrectly! "
-                            "Please try again later, or report this problem to staff."
-                        ).format(d["type"])
+                            "Sorry, your {} token is configured incorrectly!"
+                            " Try again later or concact staff."
+                        ).format(space_name)
                     )
                 self.log.error(
                     "Token from %r marked as %r but I don't know that space! %r",
                     evt.sender,
-                    d["type"],
+                    space_name,
                     token,
                 )
                 continue
+
+            self.log.info(
+                "Inviting %r as %r (%r)",
+                evt.sender,
+                space_name,
+                self.config["rooms"].get(d["type"]),
+            )
+
+            success = False
             try:
                 await self.client.invite_user(
                     self.config["rooms"][d["type"]], evt.sender
                 )
+                success = True
             except MForbidden:
-                if pm:
-                    error_spaces.append(d["type"])
-                continue
-            if pm or not d["used_at"]:  # PM, or not previously used
-                invited_spaces.append(d["type"])
-
-        reply = ""
-        for space in invited_spaces:
-            try:
-                aliases = await self.client.api.request(
-                    Method.GET,
-                    Path.v3.rooms[self.config["rooms"][space]].aliases
-                )
-                self.log.error("foo %r", aliases)
+                pass
             except Exception:
-                self.log.exception("foooooo")
-            space_alias = ""
-            reply += "I've invited you to the {} space:{}  \n".format(space, space_alias)
-        if invited_spaces:
-            plural = len(invited_spaces) > 1
-            reply += (
-                "You should see the invite{} in your spaces list.  \n"
-                "Once you accept {}, from there you can join the "
-                "rooms and spaces that interest you. Thanks for coming to HOPE!"
-            ).format("s" if plural else "", "them" if plural else "it")
-            if error_spaces:
-                reply += "\n\n"
-        for space in error_spaces:
-            reply += "I couldn't invite you to the {} space.  \n".format(space)
-        if error_spaces:
-            plural = len(error_spaces) > 1
-            reply += (
-                "Are you already in {}? Maybe you haven't "
-                "accepted the invite{} - check the spaces list on "
-                "the left or in the menu."
-            ).format("them" if plural else "it", "s" if plural else "")
-        if reply:
-            await evt.reply(reply)
+                self.log.exception(
+                    "Unexpected failure inviting %r to %r", evt.sender, space_name
+                )
+
+            if success:
+                successes += 1
+                replies.append(
+                    (
+                        "I've invited you to the {} space! {}"
+                        # " Click the link there, or check the sidebar or spaces list."
+                    ).format(space_name, await self.room_mention(space_id))
+                )
+            else:
+                membership = None
+                space_members = await self.client.get_joined_members(space_id)
+                if evt.sender in space_members:
+                    membership = space_members[evt.sender].membership
+
+                if membership == Membership.JOIN:
+                    message = "You're already in the {name} space: {link}"
+                elif membership == Membership.INVITE:
+                    message = (
+                        "I've already sent you an invite to the {name} space,"
+                        " but you haven't accepted it. Try clicking here {link},"
+                        " or check the sidebar or spaces list."
+                    )
+                elif membership == Membership.BAN:
+                    message = (
+                        "You were removed from the {name} space. You can only"
+                        " re-enter by working with staff."
+                    )
+                else:
+                    self.log.error(
+                        "Couldn't invite %r to %r for an unknown reason",
+                        evt.sender,
+                        space_name,
+                    )
+                    message = (
+                        "I couldn't invite you to {name}. Try this link {link},"
+                        " check the sidebar or spaces list for an invite, try"
+                        " again later, or report this problem to staff."
+                    )
+
+                replies.append(
+                    message.format(
+                        name=space_name, link=await self.room_mention(space_id)
+                    )
+                )
+
+        if successes > 0:
+            plural = successes > 1
+            replies.append(
+                (
+                    "You should see the invite{plur} in your spaces list, or by"
+                    " clicking the link{plur} above."
+                    " Once you accept {itthem}, from there you can join the"
+                    " rooms and spaces that interest you."
+                ).format(plur="s" if plural else "", itthem="them" if plural else "it")
+            )
+        if replies:
+            replies.append("Thanks for coming to HOPE!")
+            await evt.reply("\n\n".join(replies))
 
     @classmethod
     def get_config_class(cls) -> Type[BaseProxyConfig]:
