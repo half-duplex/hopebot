@@ -82,10 +82,13 @@ class HopeBot(Plugin):
         self.log.debug("Starting talk timer loop")
         try:
             while True:
+                try:
+                    await self.schedule_talk_pins()
+                except Exception:
+                    self.log.exception("Exception in talk_timer_loop")
                 now = datetime.now(UTC)
                 next_run = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
                 await sleep((next_run - now).total_seconds())
-                await self.schedule_talk_pins()
         except AsyncioCancelledError:
             self.log.debug("Stopping talk timer loop")
         except Exception:
