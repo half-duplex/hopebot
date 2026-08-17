@@ -111,14 +111,21 @@ class HopeBot(Plugin):
         await self.client.send_state_event(space, EventType.SPACE_CHILD, content, child)
 
     async def schedule_talk_pins(self) -> None:
+        """Scheduled events
+
+        - Announces sessions starting soon in announcements room
+        - Announces in each starting session's room that it's starting
+        - Marks current/soon sessions as "suggested" and adds them to the livetalks space
+        - Removes ended sessions from "suggested" and livetalks
+        """
+
         if not self.config or not self.database:
             raise Exception("Config or database not initialized")
         self.log.debug("Updating talk space pins")
 
         now = datetime.now(UTC)
+        # for testing:
         # now += timedelta(days=6, hours=15, minutes=0)
-        soon = now + timedelta(minutes=10)
-        earlier = now - timedelta(minutes=11)
 
         talks = {
             RoomID(v["room_id"]): v
@@ -126,17 +133,6 @@ class HopeBot(Plugin):
                 """SELECT room_id, start_ts, end_ts, talk_title, location FROM talks"""
             )
         }
-        talks_nowish = {
-            k: v
-            for k, v in talks.items()
-            if v["start_ts"] < soon and v["end_ts"] > earlier
-        }
-        self.log.debug(
-            "There's %s nowish (%r) talks: %r",
-            len(talks_nowish),
-            now.isoformat(),
-            talks_nowish.values(),
-        )
 
         invalidate_cache = False
         talks_to_announce: list[Record] = []
@@ -154,18 +150,28 @@ class HopeBot(Plugin):
             if room_id not in talks:
                 self.log.error("Unknown room %r: Please run !sync_talks", room_id)
                 continue
-            talk = talks[room_id]
-            started = talk["start_ts"] < now
-            recent_start = started and talk["start_ts"] > now - timedelta(hours=1)
-            ended = talk["end_ts"] < now
-            live = started and not ended
-            nowish = room_id in talks_nowish
 
-            order_set = (
-                "t4"
-                if ended
-                else "t3" if not started else "t2" if recent_start else "t1"
-            )
+            talk = talks[room_id]
+            upcoming = talk["start_ts"] > now
+            starting_soon = talk["start_ts"]
+            ended = talk["end_ts"] < now
+            live = talk["start_ts"] < now and not ended
+            just_ended = talk["end_ts"] > now - timedelta(minutes=15)
+            nowish = just_ended or live or starting_soon
+            duration = talk["end_ts"] - talk["start_ts"]
+
+            # Raise rooms for talks people are likely to be looking for
+            if nowish and duration <= timedelta(hours=2):
+                order_set = "t1"
+            elif nowish:
+                # live workshops and villages
+                # no time in room name so no sorting worries
+                order_set = "t2"
+            elif upcoming:  # (but not starting_soon)
+                order_set = "t3"
+            else:  # ended
+                order_set = "t4"
+
             expect_order = "{}_{:012d}".format(
                 order_set, int(talk["start_ts"].timestamp())
             )
@@ -1293,7 +1299,9 @@ class HopeBot(Plugin):
             return
 
         token_match = re.search(self.config["token_regex"], evt.content.body)
-        talk_shortcodes = re.findall(self.config["schedule_talk_regex"], evt.content.body)
+        talk_shortcodes = re.findall(
+            self.config["schedule_talk_regex"], evt.content.body
+        )
 
         if talk_shortcodes and not token_match and not evt.content.body[0] == "!":
             room_ids = [
