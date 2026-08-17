@@ -717,7 +717,9 @@ class HopeBot(Plugin):
                 topic += "<br><a href='{}'>{} in {}</a>{}".format(
                     talk.url, date, talk.room, stream_link
                 )
-                topic_plain += "\n- {} in {}{}, {}  ".format(date, talk.room, stream_text, talk.url)
+                topic_plain += "\n- {} in {}{}, {}  ".format(
+                    date, talk.room, stream_text, talk.url
+                )
 
             join_rules_content = JoinRulesStateEventContent(
                 join_rule=JoinRule.RESTRICTED,

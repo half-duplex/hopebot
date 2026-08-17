@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.13", "3.14"]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -30,7 +30,7 @@ jobs:
         uv run black . --check --diff
     - name: Lint with flake8
       run: |
-        uv run flake8 . --count --exit-zero --statistics
-    - name: Lint with mypy
+        uv run flake8 . --count --statistics
+    - name: Lint with mypy (ignore results for now)
       run: |
         uv run mypy . || true

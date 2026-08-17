@@ -15,7 +15,21 @@ if TYPE_CHECKING:
     from mautrix.types import RoomID, StrippedStateEvent
 
 TITLE_XOFY_REGEX = re.compile(
-    r"(.*?),? \((?:(?:(?:Day|[Pp]art) ?)?(?:\d+)(?:(?: of | ?/ ?)\d+(?: [Pp]arts| [Dd]ays)?)?|(?:Fri|Sat|Sun) ONGOING)\)"
+    r"""
+        (.*?),?\ \( # Capture base talk title, drop ", ("
+            (?:
+                (?:(?:Day|Part)\ ?)? # optional "Day "
+                \d+
+                (?:
+                    (?:\ of\ |\ ?/\ ?) # "1 of 3", "1 / 3"
+                    \d+
+                    (?:\ Parts|\ Days)? # "1 of 3 days"
+                )?
+            | (?:Fri|Sat|Sun)(?:\ ONGOING)? # "(Fri)", "(Fri ONGOING)"
+            )
+        \)
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
 ROOM_SHORTEN_REGEX = re.compile(
     r"^(?:The )?(.*?)( \(.*|/.*|Auditorium|Theat(?:er|re)|lage|race| ONGOING)*$"
