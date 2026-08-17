@@ -542,15 +542,16 @@ wheels = [
 ]
 
 [[package]]
-name = "flake8-future-import"
-version = "0.4.7"
+name = "flake8-future-annotations"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "flake8" },
+    { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2f/aa/61c97012ce14d69730ced33bbc19837a86dbb5c400acb9163d5f9afbfca2/flake8-future-import-0.4.7.tar.gz", hash = "sha256:ed826cca28fd4b55c486d69c4bfb32e9a052efc66714bf22bf471f50ecf8e0de", size = 11717, upload-time = "2022-08-02T22:45:52.568Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/eb/eee3a350b4c1cae50f9040e78b80b39a3a0d7a5165c5837b68bff00513b3/flake8-future-annotations-1.1.0.tar.gz", hash = "sha256:df416bd2b9e1eda7ea639a5fd2a083dabb942ffe49d197f836df380d0dcf6608", size = 6832, upload-time = "2023-01-23T02:05:53.949Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/ad/3a88ed602f05cb91935a605fe92545e78637fe11fc06f5ba99fb5107967a/flake8_future_import-0.4.7-py2.py3-none-any.whl", hash = "sha256:7ecb1b89f5e026afb0cfdb8642d150bf56efbb6fb86a713ea4568398142f47ae", size = 7920, upload-time = "2022-08-02T22:45:51.006Z" },
+    { url = "https://files.pythonhosted.org/packages/45/e4/e3e6f788d9d5b5ff9a5fe2ceb6aaff9dea248aaa24c0217866c65fa5d0bf/flake8_future_annotations-1.1.0-py3-none-any.whl", hash = "sha256:555f16f51ae24ab4d0683b1ce8d0f59d36259c3a7e776bd5642f58c78ce7d3ab", size = 10408, upload-time = "2023-01-23T02:05:51.384Z" },
 ]
 
 [[package]]
@@ -714,7 +715,7 @@ dev = [
     { name = "asyncpg-stubs" },
     { name = "black" },
     { name = "flake8" },
-    { name = "flake8-future-import" },
+    { name = "flake8-future-annotations" },
     { name = "flake8-isort" },
     { name = "flake8-pyproject" },
     { name = "flake8-type-checking" },
@@ -737,7 +738,7 @@ dev = [
     { name = "asyncpg-stubs", specifier = "~=0.31.3" },
     { name = "black", specifier = "~=26.5" },
     { name = "flake8", specifier = "~=7.3" },
-    { name = "flake8-future-import", specifier = "~=0.4.7" },
+    { name = "flake8-future-annotations", specifier = "~=1.1.0" },
     { name = "flake8-isort", specifier = "~=7.0" },
     { name = "flake8-pyproject", specifier = "~=1.2" },
     { name = "flake8-type-checking", specifier = "~=3.0" },

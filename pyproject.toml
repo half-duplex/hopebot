@@ -29,11 +29,11 @@ Repository = "https://github.com/half-duplex/hopebot"
 dev = [
     "black~=26.5",
     "flake8~=7.3",
-    "flake8-future-import ~= 0.4.7",
-    "flake8-isort ~= 7.0",
-    "flake8-pyproject ~= 1.2",
-    "flake8-type-checking ~= 3.0",
-    "mypy ~= 2.3.0",
+    "flake8-future-annotations~=1.1.0",
+    "flake8-isort~=7.0",
+    "flake8-pyproject~=1.2",
+    "flake8-type-checking~=3.0",
+    "mypy~=2.3.0",
     "asyncpg-stubs~=0.31.3",
     "types-python-dateutil~=2.9",
 ]
