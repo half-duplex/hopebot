@@ -71,14 +71,6 @@ class HopeBot(Plugin):
         if not self.config:
             raise Exception("Config not initialized")
         self.config.load_and_update()
-        self.token_regex = re.compile(
-            self.config["token_regex"],
-            re.IGNORECASE,
-        )
-        self.schedule_talk_regex = re.compile(
-            self.config["schedule_talk_regex"],
-            re.IGNORECASE,
-        )
         self.tz = tz.gettz(self.config["timezone"])
         self.talk_timer_task = create_task(self.talk_timer_loop())
 
@@ -456,7 +448,7 @@ class HopeBot(Plugin):
                 )
             else:
                 if talk.startswith("http"):  # Got a link
-                    shortcode_match = self.schedule_talk_regex.match(talk)
+                    shortcode_match = re.match(self.config["schedule_talk_regex"], talk)
                     if not shortcode_match:
                         await evt.reply(
                             "Sorry, I couldn't understand that. Try a link or shortcode."
@@ -650,7 +642,7 @@ class HopeBot(Plugin):
             )
             return
         if target_talk and target_talk.startswith("http"):  # Link to shortcode
-            shortcode_match = self.schedule_talk_regex.match(target_talk)
+            shortcode_match = re.match(self.config["schedule_talk_regex"], target_talk)
             if not shortcode_match:
                 await evt.reply(
                     "Sorry, I couldn't understand that. Try a link or shortcode."
@@ -1163,7 +1155,7 @@ class HopeBot(Plugin):
             )
             return
 
-        token_match = self.token_regex.fullmatch(token)
+        token_match = re.fullmatch(self.config["token_regex"], token)
         if token_match:
             token_hash = sha256(token.encode()).digest()
         else:
@@ -1216,7 +1208,7 @@ class HopeBot(Plugin):
             )
             return
 
-        token_match = self.token_regex.fullmatch(token)
+        token_match = re.fullmatch(self.config["token_regex"], token)
         if token_match:
             token_hash = sha256(token.encode()).digest()
         else:
@@ -1296,8 +1288,8 @@ class HopeBot(Plugin):
         if evt.sender == self.client.mxid:
             return
 
-        token_match = self.token_regex.search(evt.content.body)
-        talk_shortcodes = self.schedule_talk_regex.findall(evt.content.body)
+        token_match = re.search(self.config["token_regex"], evt.content.body)
+        talk_shortcodes = re.findall(self.config["schedule_talk_regex"], evt.content.body)
 
         if talk_shortcodes and not token_match and not evt.content.body[0] == "!":
             room_ids = [
