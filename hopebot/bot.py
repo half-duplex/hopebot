@@ -73,6 +73,7 @@ class HopeBot(Plugin):
         self.config.load_and_update()
         self.tz = tz.gettz(self.config["timezone"])
         self.talk_timer_task = create_task(self.talk_timer_loop())
+        await self.sync_direct_rooms()
 
     async def stop(self) -> None:
         self.talk_timer_task.cancel()
